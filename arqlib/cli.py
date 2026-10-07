@@ -176,6 +176,8 @@ def _jsm(ctx: Context, args) -> int:
             raise ValueError(f"una respuesta pública necesita --template ({', '.join(PUBLIC_TEMPLATES)})")
         if not matches_template(load_template(args.template), text):
             raise ValueError(f"el texto no sigue la plantilla {args.template}: redactarlo desde ella")
+        if meta["pry"] not in text:
+            raise ValueError(f"el texto no menciona {meta['pry']}: ¿es la respuesta de otro pedido?")
         needed = PUBLIC_TEMPLATES[args.template]
         if meta.get("estado") != needed:
             raise ValueError(f"{args.template} se publica en estado {needed}; el pedido está en {meta.get('estado')}")
@@ -187,6 +189,11 @@ def _jsm(ctx: Context, args) -> int:
     if not args.apply:
         print(APPLY_HINT)
         return 0
+    for entry in read_entries(ctx.repo):
+        if (entry.get("action"), entry.get("key"), entry.get("public"), entry.get("body")) == (
+                "jsm-comment", meta["jsm"], args.public, text):
+            raise ValueError(f"ya se publicó este mismo mensaje en {meta['jsm']} ({entry.get('ts', 'sin fecha')}): "
+                             "no se reenvía")
     ctx.client("jsm").comment(meta["jsm"], text, public=args.public)
     print(f"publicado: {kind} en {meta['jsm']}")
     return 0

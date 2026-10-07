@@ -80,13 +80,17 @@ class JiraTest(unittest.TestCase):
         self.assertEqual(client(opener).find_user("requester@example.com"), "a2")
         self.assertIn("/rest/api/3/user/search?query=requester%40example.com", opener.calls[0][1])
 
-    def test_find_user_hidden_email_single_result(self):
-        self.assertEqual(client(FakeOpener([{"accountId": "a9"}])).find_user("x@y.com"), "a9")
+    def test_find_user_hidden_email_fails_closed(self):
+        # user/search matches by prefix: a single hit with a hidden email may be someone else (ana@corp.com.ar)
+        with self.assertRaisesRegex(JiraError, "no se puede confirmar"):
+            client(FakeOpener([{"accountId": "a9"}])).find_user("ana@corp.com")
 
-    def test_find_user_none_or_ambiguous(self):
+    def test_find_user_none_or_only_other_people(self):
         with self.assertRaisesRegex(JiraError, "cliente del Service Desk"):
             client(FakeOpener([])).find_user("x@y.com")
-        with self.assertRaisesRegex(JiraError, "ambiguo"):
+        with self.assertRaisesRegex(JiraError, "cliente del Service Desk"):
+            client(FakeOpener([{"accountId": "a", "emailAddress": "x@y.com.ar"}])).find_user("x@y.com")
+        with self.assertRaisesRegex(JiraError, "no se puede confirmar"):
             client(FakeOpener([{"accountId": "a"}, {"accountId": "b"}])).find_user("x@y.com")
 
     def test_participants_and_labels(self):

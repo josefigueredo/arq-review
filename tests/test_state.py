@@ -45,6 +45,10 @@ class StateTest(unittest.TestCase):
         with self.assertRaisesRegex(StateError, "input faltante"):
             transition(meta("en-analisis", veredicto="aprobar", faltantes="rollback"), "en-firma")
 
+    def test_back_to_analysis_clears_the_signature(self):
+        back = transition(meta("en-firma", veredicto="aprobar", firmante="juan"), "en-analisis")
+        self.assertEqual(back["firmante"], "")
+
     def test_publicado_requires_firmante(self):
         with self.assertRaisesRegex(StateError, "firmante"):
             transition(meta("en-firma", veredicto="aprobar"), "publicado")

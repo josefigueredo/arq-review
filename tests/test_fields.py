@@ -47,6 +47,18 @@ class FieldsTest(unittest.TestCase):
         self.assertEqual(apply_updates(meta(), {"veredicto": "aprobar-con-condiciones"})["veredicto"],
                          "aprobar-con-condiciones")
 
+    def test_firmante_only_while_en_firma(self):
+        with self.assertRaisesRegex(FieldsError, "en-firma"):
+            apply_updates(meta(), {"firmante": "juan"})
+        self.assertEqual(apply_updates(meta(estado="en-firma", veredicto="aprobar"), {"firmante": "juan"})["firmante"],
+                         "juan")
+
+    def test_verdict_and_missing_input_are_locked_from_en_firma_on(self):
+        for estado in ("en-firma", "publicado", "cerrado"):
+            for updates in ({"veredicto": "rechazar"}, {"faltantes": "rollback"}):
+                with self.assertRaisesRegex(FieldsError, "en-analisis"):
+                    apply_updates(meta(estado=estado, veredicto="aprobar"), updates)
+
     def test_returns_copy(self):
         original = meta()
         apply_updates(original, {"senales": "finops"})

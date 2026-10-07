@@ -44,6 +44,8 @@ def transition(meta: Dict[str, str], to: str, resultado: str = "") -> Dict[str, 
         raise StateError("no se puede publicar sin firmante: una persona tiene que firmar la revisión")
     new = dict(meta)
     new["estado"] = to
+    if current == "en-firma" and to == "en-analisis":
+        new["firmante"] = ""  # a signature covers one verdict: reopening the analysis voids it
     if to == "cerrado":
         if resultado not in RESULTADOS:
             raise StateError(f"resultado inválido {resultado!r}; válidos: {', '.join(RESULTADOS)}")

@@ -66,6 +66,8 @@ El debate técnico va con `--internal`, nunca con `--public`.
 Firma una persona según el nivel: `simple` → alguien del track técnico; `complejo` → el Sr Expert. Es política
 interna: no se escribe en los tickets. Quien firma revisa `reviews/PRY-AAAA-NNNN.md` y, si está de acuerdo,
 `arq set PRY-AAAA-NNNN firmante=<usuario>`. Después: `arq state PRY-AAAA-NNNN --to publicado` (el CLI exige firmante).
+Si quien firma pide cambios: `arq state PRY-AAAA-NNNN --to en-analisis`. Eso anula la firma, y el veredicto y los
+faltantes solo se pueden cambiar ahí; al volver a `en-firma` hay que firmar de nuevo.
 
 ## 6. Devolución y cierre
 

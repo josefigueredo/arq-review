@@ -96,12 +96,13 @@ class Jira:
         exact = [u for u in users if (u.get("emailAddress") or "").lower() == email.lower()]
         if len(exact) == 1:
             return exact[0]["accountId"]
-        if not users:
-            raise JiraError(f"no se encontró a {email} en Jira: pedir que lo den de alta como cliente del Service "
-                            "Desk y volver a correr")
-        if len(users) == 1 and not users[0].get("emailAddress"):
-            return users[0]["accountId"]  # the site hides emails: a single hit is the only safe match
-        raise JiraError(f"el email {email} es ambiguo en Jira ({len(users)} usuarios): resolverlo a mano")
+        if any(not u.get("emailAddress") for u in users):
+            # user/search matches by prefix and this site hides emails: never guess who the requester is
+            raise JiraError(f"Jira oculta el email de los usuarios que coinciden con {email}: no se puede confirmar "
+                            "la identidad. Pedir a un admin de Jira que haga visible el email (o que confirme la "
+                            "cuenta) y volver a correr")
+        raise JiraError(f"no se encontró a {email} en Jira: pedir que lo den de alta como cliente del Service "
+                        "Desk y volver a correr")
 
     def create_request(self, service_desk_id: str, request_type_id: str, summary: str, description: str,
                        on_behalf_of: str = "") -> str:

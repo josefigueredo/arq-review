@@ -10,6 +10,8 @@ COMPONENTES: Tuple[str, ...] = ("computo", "datos", "identidad", "red", "aprovis
 SENALES: Tuple[str, ...] = ("cloud", "seguridad", "finops")
 VEREDICTOS: Tuple[str, ...] = ("aprobar", "aprobar-con-condiciones", "rechazar")
 EDITABLE: Tuple[str, ...] = ("faltantes", "componente_debil", "senales", "veredicto", "firmante")
+# Once a review goes to signature, what was signed cannot change under the signature (spec D4).
+LOCKED_FROM: Tuple[str, ...] = ("en-firma", "publicado", "cerrado")
 
 
 class FieldsError(ValueError):
@@ -39,6 +41,11 @@ def apply_updates(meta: Dict[str, str], updates: Dict[str, str]) -> Dict[str, st
         if key not in EDITABLE:
             hint = " (usar arq state)" if key == "estado" else ""
             raise FieldsError(f"el campo {key!r} no se edita con set{hint}; editables: {', '.join(EDITABLE)}")
+        if key in ("veredicto", "faltantes") and meta.get("estado") in LOCKED_FROM:
+            raise FieldsError(f"{key} queda fijo desde en-firma: volver a en-analisis para cambiarlo "
+                              "(eso anula la firma)")
+        if key == "firmante" and meta.get("estado") != "en-firma":
+            raise FieldsError("se firma solo en estado en-firma, sobre el veredicto propuesto")
         if key == "faltantes":
             if meta.get("nivel") not in ("simple", "complejo"):
                 raise FieldsError("el pedido no tiene nivel: correr `arq triage` primero")

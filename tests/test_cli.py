@@ -8,6 +8,7 @@ from datetime import date
 
 import helpers
 from arqlib.cli import main
+from arqlib.journal import journal
 from arqlib.render import load_template, render
 from arqlib.review import load
 
@@ -150,6 +151,47 @@ class CliTest(unittest.TestCase):
         self.assertEqual(len(fake.issues), before + 1)
         self.assertEqual(run(repo, "state", PRY, "--to", "cerrado", "--resultado", "aprobado")[0], 1)
         self.assertEqual(run(repo, "state", PRY, "--to", "cerrado", "--resultado", "condicionado")[0], 0)
+
+    def test_signature_cannot_outlive_the_verdict_it_signed(self):
+        fake = helpers.FakeJira()
+        repo = opened_repo(fake)
+        run(repo, "state", PRY, "--to", "en-analisis")
+        self.assertEqual(run(repo, "set", PRY, "firmante=juan", "veredicto=aprobar")[0], 1)  # firma antes de en-firma
+        run(repo, "set", PRY, "veredicto=aprobar")
+        run(repo, "state", PRY, "--to", "en-firma")
+        run(repo, "set", PRY, "firmante=juan")
+        run(repo, "state", PRY, "--to", "en-analisis")
+        run(repo, "set", PRY, "veredicto=rechazar")
+        run(repo, "state", PRY, "--to", "en-firma")
+        code, _, err = run(repo, "state", PRY, "--to", "publicado")
+        self.assertEqual(code, 1)
+        self.assertIn("firmante", err)  # la firma anterior no vale para el veredicto nuevo
+        run(repo, "set", PRY, "firmante=juan")
+        run(repo, "state", PRY, "--to", "publicado")
+        self.assertEqual(run(repo, "set", PRY, "veredicto=aprobar")[0], 1)  # publicado: el veredicto queda fijo
+        self.assertEqual(run(repo, "state", PRY, "--to", "cerrado", "--resultado", "aprobado")[0], 1)
+        self.assertEqual(run(repo, "state", PRY, "--to", "cerrado", "--resultado", "rechazado")[0], 0)
+
+    def test_same_public_reply_is_not_sent_twice(self):
+        fake = helpers.FakeJira()
+        repo = opened_repo(fake)
+        run(repo, "state", PRY, "--to", "esperando-info")
+        info = write(repo, "info.md", pedido_info())
+        journal(repo, "jsm")({"action": "jsm-comment", "key": "JSM-1", "public": True, "body": pedido_info().strip()})
+        code, _, err = run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md", "--apply",
+                           fake=fake)
+        self.assertEqual((code, fake.comments), (1, []))
+        self.assertIn("ya se publicó", err)
+
+    def test_public_reply_must_name_this_request(self):
+        fake = helpers.FakeJira()
+        repo = opened_repo(fake)
+        run(repo, "state", PRY, "--to", "esperando-info")
+        other = write(repo, "other.md", pedido_info().replace(PRY, "PRY-2026-0026"))
+        code, _, err = run(repo, "jsm", PRY, "--file", other, "--public", "--template", "jsm-pedido-info.md",
+                           fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn(PRY, err)
 
     def test_bad_pry_never_touches_disk(self):
         repo = helpers.make_repo()
