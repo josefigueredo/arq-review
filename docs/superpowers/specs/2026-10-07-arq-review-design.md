@@ -1,0 +1,247 @@
+# arq-review — Diseño
+
+- **Fecha:** 2026-10-07
+- **Estado:** borrador para revisión
+- **Dueño:** Sr Expert de Arquitectura
+
+## 1. Propósito
+
+Los pedidos de proyecto (`PRY-YYYY-NNNN`) llegan a la plataforma de requerimientos descritos de forma pobre, porque
+quien los escribe no sabe qué pedir. Cloud, Arquitectura, Seguridad y FinOps tienen que validarlos, y la plataforma solo
+permite **Aprobar** o **Rechazar** con un comentario (obligatorio al rechazar). No tiene hilo de conversación ni
+feedback, y no hay documentación ni journey de la plataforma.
+
+`arq-review` automatiza la parte de **Arquitectura** de esa validación:
+
+1. Exige el **input mínimo** según la complejidad del pedido y distingue un diseño revisable de prosa aspiracional.
+2. Analiza el pedido contra las **constraints** publicadas por Arquitectura.
+3. Si la propuesta original es viable, la conserva y propone **2 alternativas para el componente más débil**. Si no lo
+   es, propone 2 alternativas completas y dice qué tendría que cambiar el original.
+4. Devuelve un análisis profesional **con recomendaciones**, un veredicto propuesto y **señales sin veredicto** para
+   Cloud, Seguridad y FinOps.
+5. Da **visibilidad fuerte dentro y fuera del equipo** a través de Jira (Software y Service Desk).
+
+**Éxito:** cada PRY tiene una épica en Jira, una conversación auditable con el requirente en JSM y un análisis
+versionado en git. Ninguna decisión depende de chats por fuera del registro, y el veredicto cita reglas, no opiniones.
+
+## 2. Decisiones tomadas
+
+| # | Decisión | Motivo |
+|---|---|---|
+| D1 | Entrada manual (pegar texto o screenshot) ahora; MCP de **solo lectura** sobre el backend de la plataforma después. | Valor inmediato. El análisis consume un pedido normalizado, así que cambiar de adaptador no lo toca. |
+| D2 | Comentario corto en la plataforma + análisis completo en markdown en git (fuente de verdad), con proyecciones a Confluence o a un RFC de Product Brain. | El comentario es la decisión y el documento es la justificación. Las copias nunca se editan a mano. |
+| D3 | Veredicto solo de Arquitectura + señales sin veredicto para Cloud, Seguridad y FinOps. | No pisar la autoridad de otros sectores y evitar rechazos en serie. |
+| D4 | Revisión por niveles: `simple` la firma alguien del track técnico; `complejo` la firma el Sr Expert. El EM hace el triage. | Evitar el cuello de botella en una sola persona y dar crecimiento al equipo. |
+| D5 | Requirentes conversan en el **Service Desk (JSM)**; el trabajo interno vive en Jira Software. | La plataforma no tiene comentarios. Jira es el sistema de registro. |
+| D6 | Labels neutros: `track:coordinacion`, `track:tecnica`, `nivel:simple`, `nivel:complejo`, `pry:YYYY-NNNN`. Nunca labels de seniority. | Los artefactos describen trabajo; los roles describen personas. Evitar roces. |
+| D7 | Nunca rechazar por falta de input al principio: el PRY queda pendiente con un **timebox** mientras se itera en JSM. | El rechazo en la plataforma parece terminal (ver S1). |
+| D8 | **Épica siempre**, una por PRY. Nivel simple: épica mínima. Nivel complejo: épica con 4 historias. | Un solo patrón en el tablero, legible para el EM. |
+| D9 | Cliente propio de Jira y JSM, **solo stdlib**, inspirado en los patrones de `jira-kanban` (dry run, preview HTML, `--apply` ejecutado por el usuario, journal, reanudar sin duplicar). Sin depender de que `jk` esté instalado. | `jk` no cubre JSM, links, comentarios ni búsqueda por label, y vive en una sola máquina. |
+| D10 | Dos skills de rol (`arq-manager`, `arq-architect`) sobre un **contrato compartido** y scripts determinísticos. Ninguna skill invoca a la otra; el estado vive en el archivo del review. | Separar el juicio técnico de la orquestación sin duplicar reglas. |
+| D11 | La herramienta (`arq-review`) y los datos (repo de reviews del equipo) son repos separados. | Que cada revisión no ensucie el historial de la herramienta, y que la herramienta sirva a más de un equipo. |
+
+## 3. Supuestos no verificados
+
+- **S1.** Un rechazo en la plataforma es **terminal** (no se puede reabrir el mismo PRY). Se diseña para el peor caso.
+  Si resulta falso, el diseño sigue sirviendo y solo gana flexibilidad.
+- **S2.** Hay un proyecto JSM disponible y los requirentes pueden usar su portal.
+- **S3.** La instancia de Jira usa la jerarquía estándar: Épica → Story/Task → Sub-task.
+
+## 4. Layout
+
+Herramienta (`~/CurrentCode/SPECKIT/Harness/arq-review`):
+
+```
+arq-review/
+├── install.sh                  # symlinks como WayOfWork / jira-kanban (~/.agents/skills → ~/.claude, ~/.codex)
+├── arq.py                      # CLI `arq` (stdlib)
+├── arqlib/                     # triage, state, constraints, jira, jsm, render, preview, journal
+├── contract/
+│   ├── constraints.md          # escrito por Arquitectura
+│   ├── triage.md
+│   ├── minimum-input.md
+│   └── templates/
+│       ├── analisis.md         # estilo MADR
+│       ├── comentario-pry.md
+│       ├── jsm-pedido-info.md
+│       ├── jsm-devolucion.md
+│       └── escalar-rfc.md
+├── skills/
+│   ├── arq-manager/SKILL.md
+│   └── arq-architect/SKILL.md
+├── tests/
+│   ├── test_*.py               # determinístico
+│   └── golden/PRY-2026-0026/, PRY-2026-0028/   # input.md + expected.yaml
+└── docs/superpowers/specs/
+```
+
+Repo de reviews del equipo (cualquier ruta; el CLI trabaja sobre el cwd):
+
+```
+<repo-reviews>/
+├── .arq/config.json            # jira_project, jsm_project, jsm_request_type, confluence_space, timebox_dias
+├── .arq/jira-writes.jsonl      # journal de escrituras
+└── reviews/PRY-2026-0028.md    # frontmatter de estado + análisis
+```
+
+Credenciales por variables de entorno (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`), nunca en archivos del repo.
+
+## 5. Flujo y responsabilidades
+
+```
+PRY nuevo
+ └─ arq-manager
+     1. Intake: normaliza el pedido → reviews/PRY-XXXX.md (estado: recibido)
+     2. Triage sí/no (arq triage) → nivel (estado: triado)
+     3. Épica + tareas + request JSM, todo linkeado (dry run → el usuario aplica)
+     4. Arranca el timebox
+ └─ arq-architect
+     5. Gap check vs minimum-input del nivel
+        ├─ falta → redacta jsm-pedido-info (estado: esperando-info) ─┐
+        │                                   respuesta del requirente ◄┘ → vuelve a 5
+        └─ OK → estado: en-analisis
+     6-9. Método (sección 7) → análisis + veredicto propuesto (estado: en-firma)
+ └─ HUMANO firma: track técnico si es simple, Sr Expert si es complejo
+ └─ arq-manager
+     10. Publica: respuesta pública JSM + comentario corto para PRY + copia Confluence/RFC (estado: publicado)
+     11. Un humano hace click en Aprobar/Rechazar en la plataforma (estado: cerrado)
+     12. Timebox vencido sin respuesta → propone rechazo por falta de información (estado: propuesta-rechazo)
+```
+
+- El EM nunca emite juicio técnico. El architect nunca gestiona tickets ni plazos.
+- **El agente nunca hace click en Aprobar/Rechazar**, tampoco con el MCP.
+- "Aprobar con condiciones" se publica como **Aprobar**, con las condiciones en el comentario, y cada condición queda
+  como sub-task de seguimiento.
+
+### 5.1 Máquina de estados (frontmatter)
+
+```
+recibido → triado → esperando-info ⇄ en-analisis → en-firma → publicado → cerrado
+                         └── timebox vencido → propuesta-rechazo → cerrado
+```
+
+`cerrado` lleva `resultado: aprobado | condicionado | rechazado`. Frontmatter mínimo:
+`pry, nombre, estado, nivel, epica, jsm, vence, firmante, resultado`. `arq state` valida las transiciones; una
+transición inválida falla.
+
+## 6. Contrato
+
+### 6.1 `constraints.md`
+
+Cada constraint con ID estable y estos campos: **Regla**, **Severidad** (`bloqueante | condicionante |
+recomendación`), **Por qué**, **Cómo verificar** y **Excepción**. `arq lint` valida que los IDs sean únicos, la
+severidad válida y los campos completos. El contenido inicial lo escribe Arquitectura (al menos: IdP platform,
+AWS como única cloud, ningún recurso por fuera de platform).
+
+### 6.2 `triage.md`
+
+Basta un solo "sí" para que el pedido sea `complejo`:
+
+1. ¿Toca más de una cuenta, empresa o vertical?
+2. ¿Es una migración o mueve datos existentes?
+3. ¿La fecha es comprometida?
+4. ¿Involucra a otros equipos además del que pide?
+5. ¿Incluye datos de clientes o personales, o servicios de IA externos?
+6. ¿Dura más de 3 meses o queda productivo?
+
+### 6.3 `minimum-input.md`
+
+El test: cada afirmación del pedido tiene que poder apuntar a un artefacto concreto (número, componente, diagrama o
+métrica). Si no puede, es prosa.
+
+- **Simple:** problema + hipótesis medible (métrica y umbral), recursos (tipo, tamaño, cantidad), duración y fecha de
+  baja, costo mensual estimado, responsable, vía de aprovisionamiento.
+- **Complejo:** todo lo anterior + diagrama C4 de nivel 1-2, flujos y clasificación de datos, cuentas y entornos de
+  origen y destino, plan de rollback, dependencias con dueño, requisitos no funcionales.
+
+### 6.4 Plantillas
+
+`analisis.md` sigue MADR: contexto, drivers, opciones consideradas, decisión, consecuencias, señales y condiciones.
+`comentario-pry.md` entra en el textarea de la plataforma: veredicto, 3-5 líneas, condiciones y link.
+`escalar-rfc.md` define cuándo escalar: nivel `complejo` **y** (más de 3 meses **o** más de 2 equipos) → RFC en Product
+Brain.
+
+## 7. Método del architect
+
+1. **Reformular** el pedido en un párrafo.
+2. **Descomponer** en componentes: cómputo, datos, identidad y acceso, red, aprovisionamiento, operación, costo.
+3. **Evaluar** cada componente contra las constraints y los pilares Well-Architected pertinentes: `ok | débil |
+   bloqueante`.
+4. **Viabilidad.** El original es viable si ninguna bloqueante queda sin solución posible.
+   - Viable → Opción 0 = original; 2 opciones **solo para el componente más débil** (mayor severidad; si empatan, el
+     de mayor costo o riesgo).
+   - No viable → 2 alternativas completas + qué tendría que cambiar el original.
+5. **Opciones.** Cada una cumple todas las bloqueantes y se diferencia de las otras en un eje real. Trae costo en orden
+   de magnitud, esfuerzo, riesgo, reversibilidad y constraints que toca.
+6. **Recomendación** con el porqué y condiciones verificables ("se cumple cuando…").
+7. **Señales** para Cloud, Seguridad y FinOps, sin veredicto.
+8. **Evidencia.** Cada afirmación lleva `[pedido]`, `[C-XXX-NN]`, `[supuesto]` o `[verificar]`.
+
+| Situación | Veredicto |
+|---|---|
+| Falta input mínimo | No se emite; se pide la información por JSM |
+| Bloqueante sin solución | Rechazar, con opciones que cumplen |
+| Bloqueante resoluble o condicionantes | Aprobar con condiciones |
+| Todo ok | Aprobar con recomendaciones |
+
+## 8. Jira y JSM
+
+**Nivel simple:** épica `[PRY-2026-0028] <nombre>` con una task "Revisión PRY" y sub-tasks: Triage y apertura
+(`track:coordinacion`), Gap check (`track:tecnica`), Análisis y opciones (`track:tecnica`), Revisión y firma
+(`track:tecnica`), Publicar devolución (`track:coordinacion`).
+
+**Nivel complejo:** épica con las historias Intake y triage (`track:coordinacion`), Análisis y opciones
+(`track:tecnica`), Validación técnica (opcional, `track:tecnica`) y Decisión y comunicación (ambos tracks), cada una
+con sus sub-tasks.
+
+Todo **sin asignar**, con `pry:` y `nivel:` en todos los issues. El request JSM queda linkeado a la épica.
+
+Reglas del cliente (`arqlib/jira.py`, `arqlib/jsm.py`):
+
+- **Dry run por defecto**, con preview HTML. Las escrituras solo con `--apply`, que corre el usuario con `!`.
+- **Journal** de cada escritura en `.arq/jira-writes.jsonl`.
+- **Idempotencia:** antes de crear, busca por JQL `labels = "pry:YYYY-NNNN"`. Si ya existe, actualiza o reanuda.
+- **JSM:** `reply --public` (Reply to customer) y `note --internal` son comandos distintos. El público solo acepta
+  texto renderizado desde `jsm-*.md`.
+- **Product Brain:** la épica ARQ es de *revisión*. Si el pedido escala a RFC, la épica de *delivery* la crea el flujo
+  de Product Brain, y las dos se linkean sin fusionarse.
+
+## 9. Publicación
+
+1. `reviews/PRY-XXXX.md` en git.
+2. Respuesta pública en JSM.
+3. Comentario corto para pegar en la plataforma (el click lo hace un humano).
+4. Copia en Confluence, o RFC en Product Brain según `escalar-rfc.md`, con el banner "generado desde git, no editar
+   acá". La publicación en Confluence queda fuera del MVP (ver sección 12).
+
+## 10. Fase 2: MCP de la plataforma
+
+Servidor MCP de **solo lectura** sobre el backend de la plataforma, con el token de la sesión del usuario. Expone
+`get_request(pry)` y `list_pending(area)`, y sigue los links de documentación (Google Docs, GitHub) cuando el usuario
+tiene acceso. Devuelve el mismo pedido normalizado que el intake manual. Sin endpoints de aprobar ni rechazar.
+
+## 11. Pruebas
+
+- **Determinístico (TDD, `unittest`, sin red):** triage, transiciones de estado, lint de constraints, payloads de
+  Jira/JSM contra un `opener` falso, idempotencia por label, reanudación por journal, render de plantillas.
+- **Golden cases:** `tests/golden/<PRY>/input.md` + `expected.yaml` con propiedades obligatorias (nivel, estado
+  esperado, input que debe pedir, constraints que debe citar, componente más débil, señales, cosas que no debe hacer).
+  `arq eval` compara la salida del architect contra la rúbrica. Cada PRY real que salga mal se convierte en un golden
+  case nuevo.
+- Golden cases iniciales: **PRY-2026-0028** (simple, esperando-info: falta hipótesis medible, fecha de baja, costo y
+  vía de aprovisionamiento; señal FinOps) y **PRY-2026-0026** (complejo, esperando-info: diagrama C4 revisable,
+  rollback, clasificación de datos para Bedrock, dependencia de la base de datos con dueño; señales Seguridad y Cloud).
+
+## 12. Fuera de alcance (MVP)
+
+- MCP de la plataforma (fase 2).
+- Publicación automática en Confluence (en el MVP la copia se hace a mano desde el markdown).
+- Métricas y dashboard de SLA más allá de los nativos de JSM.
+- Cualquier acción de aprobar o rechazar en la plataforma.
+
+## 13. Pendientes que define el usuario
+
+- Contenido inicial de `constraints.md`.
+- Claves de los proyectos de Jira Software y JSM, y el request type de JSM.
+- Confirmar el timebox de 10 días hábiles y el umbral de 3 meses.
+- Ubicación del repo de reviews del equipo.
