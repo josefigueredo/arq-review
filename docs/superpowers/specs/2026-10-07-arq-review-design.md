@@ -39,6 +39,8 @@ versionado en git. Ninguna decisión depende de chats por fuera del registro, y 
 | D9 | Cliente propio de Jira y JSM, **solo stdlib**, inspirado en los patrones de `jira-kanban` (dry run, preview HTML, `--apply` ejecutado por el usuario, journal, reanudar sin duplicar). Sin depender de que `jk` esté instalado. | `jk` no cubre JSM, links, comentarios ni búsqueda por label, y vive en una sola máquina. |
 | D10 | Dos skills de rol (`arq-manager`, `arq-architect`) sobre un **contrato compartido** y scripts determinísticos. Ninguna skill invoca a la otra; el estado vive en el archivo del review. | Separar el juicio técnico de la orquestación sin duplicar reglas. |
 | D11 | La herramienta (`arq-review`) y los datos (repo de reviews del equipo) son repos separados. | Que cada revisión no ensucie el historial de la herramienta, y que la herramienta sirva a más de un equipo. |
+| D12 | El pedido JSM se crea **a nombre del requirente** (`raiseOnBehalfOf`), buscado en Jira por el email que trae la plataforma, con el head como participante. Si no existe en Jira, no se crea nada. | Si lo crea el usuario de la API, el requirente nunca recibe notificaciones y D5 no sirve. Nunca se crea un ticket a nombre de otra persona. |
+| D13 | Lo público tiene doble guarda: el texto tiene que seguir una plantilla `jsm-*.md` y el pedido tiene que estar en el estado de esa plantilla. | Que nunca salga una devolución antes de la firma ni un texto libre al requirente. |
 
 ## 3. Supuestos no verificados
 
@@ -55,7 +57,8 @@ Herramienta (`~/CurrentCode/SPECKIT/Harness/arq-review`):
 arq-review/
 ├── install.sh                  # symlinks como WayOfWork / jira-kanban (~/.agents/skills → ~/.claude, ~/.codex)
 ├── arq.py                      # CLI `arq` (stdlib)
-├── arqlib/                     # triage, state, constraints, jira, jsm, render, preview, journal
+├── arqlib/                     # frontmatter, state, triage, constraints, inputs, timebox, config, review, render,
+│                               # structure, journal, jira (Jira + JSM), apply, preview, fields, evaluate, cli
 ├── contract/
 │   ├── constraints.md          # escrito por Arquitectura
 │   ├── triage.md
@@ -63,15 +66,16 @@ arq-review/
 │   └── templates/
 │       ├── analisis.md         # estilo MADR
 │       ├── comentario-pry.md
-│       ├── jsm-pedido-info.md
-│       ├── jsm-devolucion.md
+│       ├── jsm-pedido-info.md  # se publica en esperando-info
+│       ├── jsm-devolucion.md   # se publica en publicado
+│       ├── jsm-cierre.md       # se publica en propuesta-rechazo
 │       └── escalar-rfc.md
 ├── skills/
 │   ├── arq-manager/SKILL.md
 │   └── arq-architect/SKILL.md
 ├── tests/
 │   ├── test_*.py               # determinístico
-│   └── golden/PRY-2026-0026/, PRY-2026-0028/   # input.md + expected.yaml
+│   └── golden/PRY-2026-0026/, PRY-2026-0028/   # input.md + expected.json
 └── docs/superpowers/specs/
 ```
 
@@ -79,9 +83,12 @@ Repo de reviews del equipo (cualquier ruta; el CLI trabaja sobre el cwd):
 
 ```
 <repo-reviews>/
-├── .arq/config.json            # jira_project, jsm_project, jsm_request_type, confluence_space, timebox_dias
+├── .arq/config.json            # jira_project, jsm_project, jsm_service_desk_id, jsm_request_type_id,
+│                               # issue_types, link_type, timebox_dias_habiles
 ├── .arq/jira-writes.jsonl      # journal de escrituras
-└── reviews/PRY-2026-0028.md    # frontmatter de estado + análisis
+├── reviews/PRY-2026-0028.md    # frontmatter de estado + análisis
+├── reviews/PRY-2026-0028.jsm.md         # borrador del mensaje JSM (lo redacta el architect)
+└── reviews/PRY-2026-0028.comentario.md  # comentario para la plataforma PRY
 ```
 
 Credenciales por variables de entorno (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`), nunca en archivos del repo.
@@ -101,12 +108,17 @@ PRY nuevo
         │                                   respuesta del requirente ◄┘ → vuelve a 5
         └─ OK → estado: en-analisis
      6-9. Método (sección 7) → análisis + veredicto propuesto (estado: en-firma)
- └─ HUMANO firma: track técnico si es simple, Sr Expert si es complejo
+ └─ HUMANO firma: track técnico si es simple, Sr Expert si es complejo (`arq set firmante=...`)
  └─ arq-manager
-     10. Publica: respuesta pública JSM + comentario corto para PRY + copia Confluence/RFC (estado: publicado)
-     11. Un humano hace click en Aprobar/Rechazar en la plataforma (estado: cerrado)
-     12. Timebox vencido sin respuesta → propone rechazo por falta de información (estado: propuesta-rechazo)
+     10. Pasa a publicado (exige firmante) y recién ahí publica la devolución en JSM, crea una sub-task de
+         seguimiento por condición (`arq seguimiento`) y entrega el comentario corto para PRY
+     11. Un humano hace click en Aprobar/Rechazar en la plataforma (estado: cerrado, resultado acorde al veredicto)
+     12. Timebox vencido sin respuesta → propone rechazo por falta de información (estado: propuesta-rechazo) y
+         publica jsm-cierre
 ```
+
+Las skills pueden repetir un paso sin miedo: pedir el estado actual no hace nada, y `arq jira --apply` reanuda sin
+duplicar. El triage se puede repetir mientras no exista la épica.
 
 - El EM nunca emite juicio técnico. El architect nunca gestiona tickets ni plazos.
 - **El agente nunca hace click en Aprobar/Rechazar**, tampoco con el MCP.
@@ -120,9 +132,13 @@ recibido → triado → esperando-info ⇄ en-analisis → en-firma → publicad
                          └── timebox vencido → propuesta-rechazo → cerrado
 ```
 
-`cerrado` lleva `resultado: aprobado | condicionado | rechazado`. Frontmatter mínimo:
-`pry, nombre, estado, nivel, epica, jsm, vence, firmante, resultado`. `arq state` valida las transiciones; una
-transición inválida falla.
+`cerrado` lleva `resultado: aprobado | condicionado | rechazado`. Frontmatter:
+`pry, nombre, contacto, head, estado, nivel, epica, jsm, jsm_listo, vence, firmante, resultado, faltantes,
+componente_debil, senales, veredicto`. `arq state` valida las transiciones; una transición inválida falla.
+
+Guardas: `en-firma` exige veredicto y nada faltante; `publicado` exige firmante; cerrar desde `publicado` exige el
+resultado del veredicto (`aprobar` → `aprobado`, `aprobar-con-condiciones` → `condicionado`, `rechazar` →
+`rechazado`); cerrar desde `propuesta-rechazo` solo como `rechazado`. Pedir el estado actual no hace nada.
 
 ## 6. Contrato
 
@@ -156,7 +172,8 @@ métrica). Si no puede, es prosa.
 
 ### 6.4 Plantillas
 
-`analisis.md` sigue MADR: contexto, drivers, opciones consideradas, decisión, consecuencias, señales y condiciones.
+`analisis.md` sigue MADR: lo que entendimos, input faltante, drivers, evaluación, opciones consideradas, decisión,
+recomendación, condiciones, consecuencias, señales y veredicto.
 `comentario-pry.md` entra en el textarea de la plataforma: veredicto, 3-5 líneas, condiciones y link.
 `escalar-rfc.md` define cuándo escalar: nivel `complejo` **y** (más de 3 meses **o** más de 2 equipos) → RFC en Product
 Brain.
@@ -191,18 +208,30 @@ Brain.
 (`track:tecnica`), Publicar devolución (`track:coordinacion`).
 
 **Nivel complejo:** épica con las historias Intake y triage (`track:coordinacion`), Análisis y opciones
-(`track:tecnica`), Validación técnica (opcional, `track:tecnica`) y Decisión y comunicación (ambos tracks), cada una
-con sus sub-tasks.
+(`track:tecnica`) y Decisión y comunicación (ambos tracks), cada una con sus sub-tasks. La historia Validación técnica
+(`track:tecnica`) es opcional y se crea solo con `arq jira --con-validacion`.
 
-Todo **sin asignar**, con `pry:` y `nivel:` en todos los issues. El request JSM queda linkeado a la épica.
+**Seguimiento:** con un veredicto `aprobar-con-condiciones` publicado, `arq seguimiento` crea una sub-task por
+condición bajo la task de revisión (simple) o la historia Decisión y comunicación (complejo).
 
-Reglas del cliente (`arqlib/jira.py`, `arqlib/jsm.py`):
+Todo **sin asignar**, con `pry:` y `nivel:` en todos los issues, incluido el pedido JSM, que queda linkeado a la
+épica, creado a nombre del contacto y con el head como participante.
+
+Reglas del cliente (`arqlib/jira.py` cubre Jira y JSM):
 
 - **Dry run por defecto**, con preview HTML. Las escrituras solo con `--apply`, que corre el usuario con `!`.
 - **Journal** de cada escritura en `.arq/jira-writes.jsonl`.
-- **Idempotencia:** antes de crear, busca por JQL `labels = "pry:YYYY-NNNN"`. Si ya existe, actualiza o reanuda.
-- **JSM:** `reply --public` (Reply to customer) y `note --internal` son comandos distintos. El público solo acepta
-  texto renderizado desde `jsm-*.md`.
+- **Idempotencia en tres capas:** (1) búsqueda JQL `labels = "pry:YYYY-NNNN"`; (2) las claves del journal que la
+  búsqueda todavía no devuelve se confirman una por una, porque `search/jql` de Jira Cloud es eventualmente
+  consistente; (3) en JSM, `jsm` se guarda apenas existe el pedido y `jsm_listo=si` solo cuando tiene labels,
+  participantes y link, así un re-run completa lo que falta. Un issue que ya existe se **reutiliza tal cual**: no se
+  modifica, porque el nivel no cambia una vez creada la épica y no hay otro campo que actualizar.
+- **Claves validadas** (`[A-Z][A-Z0-9]+-\d+`) antes de entrar en cualquier URL; `JIRA_BASE_URL` tiene que ser https.
+- **JSM:** `arq jsm --public` (Reply to customer) y `arq jsm --internal` (nota interna) son canales distintos. El
+  público exige `--template` con una plantilla `jsm-*.md`, que el texto la siga y que el pedido esté en el estado de esa
+  plantilla.
+- **Supuesto a verificar en la primera corrida real:** repetir `add` de labels, participantes y un link idéntico no
+  duplica nada en Jira.
 - **Product Brain:** la épica ARQ es de *revisión*. Si el pedido escala a RFC, la épica de *delivery* la crea el flujo
   de Product Brain, y las dos se linkean sin fusionarse.
 
@@ -224,7 +253,7 @@ tiene acceso. Devuelve el mismo pedido normalizado que el intake manual. Sin end
 
 - **Determinístico (TDD, `unittest`, sin red):** triage, transiciones de estado, lint de constraints, payloads de
   Jira/JSM contra un `opener` falso, idempotencia por label, reanudación por journal, render de plantillas.
-- **Golden cases:** `tests/golden/<PRY>/input.md` + `expected.yaml` con propiedades obligatorias (nivel, estado
+- **Golden cases:** `tests/golden/<PRY>/input.md` + `expected.json` (la stdlib no trae YAML) con propiedades obligatorias (nivel, estado
   esperado, input que debe pedir, constraints que debe citar, componente más débil, señales, cosas que no debe hacer).
   `arq eval` compara la salida del architect contra la rúbrica. Cada PRY real que salga mal se convierte en un golden
   case nuevo.

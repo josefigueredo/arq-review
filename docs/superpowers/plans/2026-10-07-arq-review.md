@@ -42,8 +42,13 @@ Toda escritura en Jira es dry run por defecto; `--apply` lo corre el usuario.
 - **Plazo que cruza fines de semana o arranca un sábado**: los días hábiles saltan sábado y domingo. Test en Task 5.
 - **`constraints.md` mal escrito** (ID duplicado, severidad inválida, campo faltante): `arq lint` lista errores, no
   explota. Test en Task 4.
-- **Respuesta pública a JSM con placeholders sin completar** (`{{nombre}}`): se rechaza antes de publicar. Test en
-  Task 11.
+- **Respuesta pública a JSM con placeholders, texto libre o antes de la firma**: se rechaza antes de publicar. Tests
+  en Tasks 7 y 13.
+- **Requirente que no existe en Jira**: no se crea ningún pedido JSM y el error dice cómo darlo de alta. Test en
+  Task 10.
+- **Búsqueda de Jira que todavía no ve lo recién creado**: el journal lo cubre y no se duplica. Test en Task 10.
+- **Skill que pide el estado actual** (`esperando-info` → `esperando-info`): no hace nada en lugar de fallar. Test en
+  Task 2.
 
 ## Mapa de archivos
 
@@ -79,7 +84,6 @@ Toda escritura en Jira es dry run por defecto; `--apply` lo corre el usuario.
 **Files:**
 - Create: `arq.py`, `arqlib/__init__.py`, `arqlib/paths.py`, `arqlib/frontmatter.py`, `tests/helpers.py`,
   `tests/test_frontmatter.py`, `AGENTS.md`, `.gitignore`
-- Modify: `docs/superpowers/specs/2026-10-07-arq-review-design.md` (sección 11: `expected.yaml` → `expected.json`)
 
 **Interfaces:**
 - Produces: `paths.ROOT: Path`, `paths.CONTRACT: Path`;
@@ -203,7 +207,7 @@ if __name__ == "__main__":
 - [ ] **Step 3: Correr y verificar que falla**
 
 Run: `python3 -m unittest discover -s tests -v`
-Expected: FAIL con `ModuleNotFoundError: No module named 'arqlib.frontmatter'`
+Expected: FAIL con `ImportError: cannot import name 'frontmatter' from 'arqlib'`
 
 - [ ] **Step 4: Implementar**
 
@@ -257,15 +261,10 @@ Nota: `rstrip()` en `dump` deja `jsm:` sin espacio final cuando el valor es vac�
 Run: `python3 -m unittest discover -s tests -v`
 Expected: PASS (7 tests)
 
-- [ ] **Step 6: Ajustar el spec**
-
-En `docs/superpowers/specs/2026-10-07-arq-review-design.md`, sección 11, reemplazar `` `expected.yaml` `` por
-`` `expected.json` (la stdlib no trae YAML) ``.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add arq.py arqlib tests AGENTS.md .gitignore docs/superpowers/specs
+git add arq.py arqlib tests AGENTS.md .gitignore
 git commit -m "feat: scaffold arq CLI and flat frontmatter parser"
 ```
 
@@ -278,8 +277,12 @@ git commit -m "feat: scaffold arq CLI and flat frontmatter parser"
 
 **Interfaces:**
 - Produces: `state.STATES: Tuple[str, ...]`, `state.RESULTADOS: Tuple[str, ...]`,
-  `state.transition(meta: Dict[str, str], to: str, resultado: str = "") -> Dict[str, str]` (devuelve copia),
-  `state.StateError(ValueError)`.
+  `state.RESULTADO_POR_VEREDICTO: Dict[str, str]`,
+  `state.transition(meta: Dict[str, str], to: str, resultado: str = "") -> Dict[str, str]` (devuelve copia; pedir el
+  estado actual sin resultado no hace nada), `state.StateError(ValueError)`.
+
+Guardas: `en-firma` exige `veredicto` y `faltantes` vacío; `publicado` exige `firmante`; cerrar desde `publicado`
+exige el `resultado` que corresponde al `veredicto`; cerrar desde `propuesta-rechazo` solo como `rechazado`.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -294,20 +297,24 @@ from arqlib.state import StateError, transition
 
 
 def meta(estado: str, **extra: str) -> dict:
-    base = {"estado": estado, "firmante": "", "resultado": ""}
+    base = {"estado": estado, "firmante": "", "resultado": "", "veredicto": "", "faltantes": ""}
     base.update(extra)
     return base
 
 
 class StateTest(unittest.TestCase):
     def test_happy_path(self):
-        m = meta("recibido")
+        m = meta("recibido", veredicto="aprobar-con-condiciones")
         for to in ("triado", "esperando-info", "en-analisis", "en-firma"):
             m = transition(m, to)
         m["firmante"] = "edgardo.costilla"
         m = transition(m, "publicado")
         m = transition(m, "cerrado", resultado="condicionado")
         self.assertEqual((m["estado"], m["resultado"]), ("cerrado", "condicionado"))
+
+    def test_same_state_is_a_no_op(self):
+        for estado in ("esperando-info", "en-analisis", "triado"):
+            self.assertEqual(transition(meta(estado), estado)["estado"], estado)
 
     def test_returns_copy(self):
         original = meta("recibido")
@@ -322,13 +329,25 @@ class StateTest(unittest.TestCase):
         with self.assertRaisesRegex(StateError, "desconocido"):
             transition(meta("inventado"), "triado")
 
+    def test_en_firma_requires_verdict_and_complete_input(self):
+        with self.assertRaisesRegex(StateError, "veredicto"):
+            transition(meta("en-analisis"), "en-firma")
+        with self.assertRaisesRegex(StateError, "input faltante"):
+            transition(meta("en-analisis", veredicto="aprobar", faltantes="rollback"), "en-firma")
+
     def test_publicado_requires_firmante(self):
         with self.assertRaisesRegex(StateError, "firmante"):
-            transition(meta("en-firma"), "publicado")
+            transition(meta("en-firma", veredicto="aprobar"), "publicado")
 
     def test_cerrado_requires_valid_resultado(self):
         with self.assertRaisesRegex(StateError, "resultado"):
-            transition(meta("publicado"), "cerrado", resultado="quizas")
+            transition(meta("publicado", veredicto="aprobar"), "cerrado", resultado="quizas")
+
+    def test_cerrado_resultado_must_match_verdict(self):
+        with self.assertRaisesRegex(StateError, "rechazar.*rechazado"):
+            transition(meta("publicado", veredicto="rechazar"), "cerrado", resultado="aprobado")
+        closed = transition(meta("publicado", veredicto="rechazar"), "cerrado", resultado="rechazado")
+        self.assertEqual(closed["resultado"], "rechazado")
 
     def test_resultado_only_when_closing(self):
         with self.assertRaisesRegex(StateError, "solo al cerrar"):
@@ -366,6 +385,8 @@ from typing import Dict, FrozenSet, Tuple
 STATES: Tuple[str, ...] = ("recibido", "triado", "esperando-info", "en-analisis", "en-firma", "publicado",
                            "propuesta-rechazo", "cerrado")
 RESULTADOS: Tuple[str, ...] = ("aprobado", "condicionado", "rechazado")
+RESULTADO_POR_VEREDICTO: Dict[str, str] = {"aprobar": "aprobado", "aprobar-con-condiciones": "condicionado",
+                                           "rechazar": "rechazado"}
 
 TRANSITIONS: Dict[str, FrozenSet[str]] = {
     "recibido": frozenset({"triado"}),
@@ -387,10 +408,17 @@ def transition(meta: Dict[str, str], to: str, resultado: str = "") -> Dict[str, 
     current = meta.get("estado", "")
     if current not in TRANSITIONS:
         raise StateError(f"estado actual desconocido: {current!r}")
+    if to == current and not resultado:
+        return dict(meta)  # re-running a step is safe: asking for the current state changes nothing
     allowed = TRANSITIONS[current]
     if to not in allowed:
         valid = ", ".join(sorted(allowed)) or "ninguna (estado final)"
         raise StateError(f"transición inválida: {current} → {to}; válidas: {valid}")
+    if to == "en-firma":
+        if not meta.get("veredicto", "").strip():
+            raise StateError("no se pasa a firma sin veredicto propuesto: `arq set PRY veredicto=...`")
+        if meta.get("faltantes", "").strip():
+            raise StateError("no se pasa a firma con input faltante")
     if to == "publicado" and not meta.get("firmante", "").strip():
         raise StateError("no se puede publicar sin firmante: una persona tiene que firmar la revisión")
     new = dict(meta)
@@ -400,6 +428,10 @@ def transition(meta: Dict[str, str], to: str, resultado: str = "") -> Dict[str, 
             raise StateError(f"resultado inválido {resultado!r}; válidos: {', '.join(RESULTADOS)}")
         if current == "propuesta-rechazo" and resultado != "rechazado":
             raise StateError("una propuesta de rechazo solo puede cerrarse como rechazado")
+        expected = RESULTADO_POR_VEREDICTO.get(meta.get("veredicto", ""))
+        if current == "publicado" and resultado != expected:
+            raise StateError(f"el veredicto {meta.get('veredicto', '')!r} se cierra como {expected!r}, "
+                             f"no como {resultado!r}")
         new["resultado"] = resultado
     elif resultado:
         raise StateError("el resultado se fija solo al cerrar")
@@ -543,7 +575,7 @@ def parse_answers(text: str) -> Dict[str, bool]:
         key, sep, value = part.partition("=")
         value = value.strip().lower()
         if not sep or value not in _YES | _NO:
-            raise TriageError(f"respuesta inválida {part.strip()!r}: usar id=si o id=no")
+            raise TriageError(f"respuesta inválida {part.strip()!r}: contestar si o no (id=si o id=no)")
         answers[key.strip()] = value in _YES
     return answers
 
@@ -876,8 +908,8 @@ git commit -m "feat: add business-day timebox"
     `config.load_config(repo: Path, require_jsm: bool = False) -> dict`,
     `config.credentials(env: Mapping[str, str]) -> Tuple[str, str, str]`, `config.ConfigError(ValueError)`.
   - `review.FIELDS: Tuple[str, ...]`, `review.check_pry(pry: str) -> str` (devuelve el PRY validado),
-    `review.review_path(repo: Path, pry: str) -> Path`,
-    `review.new_review(repo: Path, pry: str, nombre: str, pedido: str) -> Path`,
+    `review.check_email(email: str) -> str`, `review.review_path(repo: Path, pry: str) -> Path`,
+    `review.new_review(repo: Path, pry: str, nombre: str, pedido: str, contacto: str, head: str = "") -> Path`,
     `review.load(repo: Path, pry: str) -> Tuple[Dict[str, str], str]`,
     `review.save(repo: Path, pry: str, meta: Dict[str, str], body: str) -> None`, `review.ReviewError(ValueError)`.
 
@@ -918,21 +950,45 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "jsm_service_desk_id"):
             load_config(repo, require_jsm=True)
 
+    def _write(self, repo, **changes):
+        path = repo / ".arq" / "config.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data.update(changes)
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return data
+
     def test_missing_issue_type(self):
         repo = helpers.make_repo()
         init_repo(repo)
-        path = repo / ".arq" / "config.json"
-        data = json.loads(path.read_text(encoding="utf-8"))
-        del data["issue_types"]["subtask"]
-        path.write_text(json.dumps(data), encoding="utf-8")
+        types = dict(json.loads((repo / ".arq" / "config.json").read_text(encoding="utf-8"))["issue_types"])
+        del types["subtask"]
+        self._write(repo, issue_types=types)
         with self.assertRaisesRegex(ConfigError, "issue_types.subtask"):
             load_config(repo)
+
+    def test_issue_types_must_be_an_object(self):
+        repo = helpers.make_repo()
+        init_repo(repo)
+        self._write(repo, issue_types="Epic")
+        with self.assertRaisesRegex(ConfigError, "issue_types"):
+            load_config(repo)
+
+    def test_require_jsm_needs_project_key(self):
+        repo = helpers.make_repo()
+        init_repo(repo)
+        self._write(repo, jsm_service_desk_id="3", jsm_request_type_id="41")
+        with self.assertRaisesRegex(ConfigError, "jsm_project"):
+            load_config(repo, require_jsm=True)
 
     def test_credentials(self):
         env = {"JIRA_BASE_URL": "https://x.atlassian.net", "JIRA_EMAIL": "a@b", "JIRA_API_TOKEN": "t"}
         self.assertEqual(credentials(env), ("https://x.atlassian.net", "a@b", "t"))
         with self.assertRaisesRegex(ConfigError, "JIRA_API_TOKEN"):
             credentials({"JIRA_BASE_URL": "u", "JIRA_EMAIL": "e"})
+
+    def test_credentials_require_https(self):
+        with self.assertRaisesRegex(ConfigError, "https"):
+            credentials({"JIRA_BASE_URL": "http://x.atlassian.net", "JIRA_EMAIL": "a@b", "JIRA_API_TOKEN": "t"})
 
 
 if __name__ == "__main__":
@@ -949,22 +1005,34 @@ import helpers
 from arqlib.review import FIELDS, ReviewError, load, new_review, review_path, save
 
 
+MAIL = "requester@example.com"
+
+
 class ReviewTest(unittest.TestCase):
     def test_new_review(self):
         repo = helpers.make_repo()
-        path = new_review(repo, "PRY-2026-0028", "PoC modelos IA\nLocales", "Habilitar una G6e.xlarge\n")
+        path = new_review(repo, "PRY-2026-0028", "PoC modelos IA\nLocales", "Habilitar una G6e.xlarge\n", MAIL,
+                          "reviewer@example.com")
         self.assertEqual(path, repo / "reviews" / "PRY-2026-0028.md")
         meta, body = load(repo, "PRY-2026-0028")
         self.assertEqual(list(meta), list(FIELDS))
-        self.assertEqual((meta["pry"], meta["nombre"], meta["estado"]), (
-            "PRY-2026-0028", "PoC modelos IA Locales", "recibido"))
+        self.assertEqual((meta["pry"], meta["nombre"], meta["estado"], meta["contacto"], meta["head"]), (
+            "PRY-2026-0028", "PoC modelos IA Locales", "recibido", MAIL, "reviewer@example.com"))
         self.assertEqual(body, "## Pedido original\n\nHabilitar una G6e.xlarge\n")
 
     def test_new_review_refuses_overwrite(self):
         repo = helpers.make_repo()
-        new_review(repo, "PRY-2026-0028", "x", "y")
+        new_review(repo, "PRY-2026-0028", "x", "y", MAIL)
         with self.assertRaisesRegex(ReviewError, "ya existe"):
-            new_review(repo, "PRY-2026-0028", "x", "y")
+            new_review(repo, "PRY-2026-0028", "x", "y", MAIL)
+
+    def test_invalid_email(self):
+        repo = helpers.make_repo()
+        for bad in ("pablo", "a@b", "a b@c.d", ""):
+            with self.assertRaisesRegex(ReviewError, "email inválido"):
+                new_review(repo, "PRY-2026-0028", "x", "y", bad)
+        with self.assertRaisesRegex(ReviewError, "email inválido"):
+            new_review(repo, "PRY-2026-0028", "x", "y", MAIL, "head")
 
     def test_malformed_and_traversal_ids_are_rejected(self):
         repo = helpers.make_repo()
@@ -979,7 +1047,7 @@ class ReviewTest(unittest.TestCase):
 
     def test_save_roundtrip(self):
         repo = helpers.make_repo()
-        new_review(repo, "PRY-2026-0026", "Product Brain", "Migrar")
+        new_review(repo, "PRY-2026-0026", "Product Brain", "Migrar", "user@example.com")
         meta, body = load(repo, "PRY-2026-0026")
         meta["nivel"] = "complejo"
         save(repo, "PRY-2026-0026", meta, body + "\n## Análisis\n")
@@ -1008,6 +1076,7 @@ from typing import List, Mapping, Tuple
 
 DEFAULT_CONFIG = {
     "jira_project": "ARQ",
+    "jsm_project": "",
     "jsm_service_desk_id": "",
     "jsm_request_type_id": "",
     "issue_types": {"epic": "Epic", "story": "Story", "task": "Task", "subtask": "Subtask"},
@@ -1048,10 +1117,16 @@ def load_config(repo: Path, require_jsm: bool = False) -> dict:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ConfigError(f"JSON inválido en {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ConfigError(f"{path} tiene que ser un objeto JSON")
     missing = [key for key in _REQUIRED if key not in data]
-    missing += [f"issue_types.{t}" for t in _ISSUE_TYPES if not (data.get("issue_types") or {}).get(t)]
+    types = data.get("issue_types")
+    if "issue_types" in data and not isinstance(types, dict):
+        raise ConfigError("issue_types tiene que ser un objeto: {\"epic\": ..., \"story\": ..., ...}")
+    missing += [f"issue_types.{t}" for t in _ISSUE_TYPES if not (types or {}).get(t)]
     if require_jsm:
-        missing += [key for key in ("jsm_service_desk_id", "jsm_request_type_id") if not str(data.get(key, "")).strip()]
+        missing += [key for key in ("jsm_project", "jsm_service_desk_id", "jsm_request_type_id")
+                    if not str(data.get(key, "")).strip()]
     if missing:
         raise ConfigError(f"faltan en {path}: {', '.join(missing)}")
     if not isinstance(data["timebox_dias_habiles"], int) or data["timebox_dias_habiles"] < 1:
@@ -1063,6 +1138,8 @@ def credentials(env: Mapping[str, str]) -> Tuple[str, str, str]:
     missing = [name for name in _ENV if not env.get(name, "").strip()]
     if missing:
         raise ConfigError(f"faltan variables de entorno: {', '.join(missing)}")
+    if not env["JIRA_BASE_URL"].startswith("https://"):
+        raise ConfigError("JIRA_BASE_URL tiene que empezar con https:// (el token viaja en cada request)")
     return env["JIRA_BASE_URL"], env["JIRA_EMAIL"], env["JIRA_API_TOKEN"]
 ```
 
@@ -1079,9 +1156,10 @@ from typing import Dict, Tuple
 
 from arqlib import frontmatter
 
-FIELDS: Tuple[str, ...] = ("pry", "nombre", "estado", "nivel", "epica", "jsm", "vence", "firmante", "resultado",
-                           "faltantes", "componente_debil", "senales", "veredicto")
+FIELDS: Tuple[str, ...] = ("pry", "nombre", "contacto", "head", "estado", "nivel", "epica", "jsm", "jsm_listo",
+                           "vence", "firmante", "resultado", "faltantes", "componente_debil", "senales", "veredicto")
 _PRY = re.compile(r"PRY-\d{4}-\d{4}")
+_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 class ReviewError(ValueError):
@@ -1094,16 +1172,25 @@ def check_pry(pry: str) -> str:
     return pry
 
 
+def check_email(email: str) -> str:
+    if not _EMAIL.fullmatch(email or ""):
+        raise ReviewError(f"email inválido {email!r}")
+    return email
+
+
 def review_path(repo: Path, pry: str) -> Path:
     return repo / "reviews" / f"{check_pry(pry)}.md"
 
 
-def new_review(repo: Path, pry: str, nombre: str, pedido: str) -> Path:
+def new_review(repo: Path, pry: str, nombre: str, pedido: str, contacto: str, head: str = "") -> Path:
     path = review_path(repo, pry)
+    check_email(contacto)
+    if head:
+        check_email(head)
     if path.exists():
         raise ReviewError(f"{path} ya existe: usar `arq show {pry}`")
     meta = {field: "" for field in FIELDS}
-    meta.update(pry=pry, nombre=" ".join(nombre.split()), estado="recibido")
+    meta.update(pry=pry, nombre=" ".join(nombre.split()), contacto=contacto, head=head, estado="recibido")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(frontmatter.dump(meta, f"## Pedido original\n\n{pedido.strip()}\n"), encoding="utf-8")
     return path
@@ -1139,14 +1226,16 @@ git commit -m "feat: add reviews repo config and review files"
 **Files:**
 - Create: `arqlib/inputs.py`, `arqlib/render.py`, `contract/minimum-input.md`, `contract/templates/analisis.md`,
   `contract/templates/comentario-pry.md`, `contract/templates/jsm-pedido-info.md`,
-  `contract/templates/jsm-devolucion.md`, `contract/templates/escalar-rfc.md`, `tests/test_inputs.py`,
-  `tests/test_render.py`
+  `contract/templates/jsm-devolucion.md`, `contract/templates/jsm-cierre.md`, `contract/templates/escalar-rfc.md`,
+  `tests/test_inputs.py`, `tests/test_render.py`
 
 **Interfaces:**
 - Produces: `inputs.NIVELES: Tuple[str, ...]`, `inputs.input_ids(nivel: str) -> List[str]` (complejo incluye simple),
   `inputs.all_ids() -> List[str]`, `inputs.InputsError(ValueError)`;
   `render.render(template: str, values: Dict[str, str]) -> str`, `render.assert_rendered(text: str) -> None`,
-  `render.load_template(name: str) -> str`, `render.RenderError(ValueError)`.
+  `render.load_template(name: str) -> str`, `render.matches_template(template: str, text: str) -> bool`
+  (el texto es la plantilla con cada placeholder completado; tolera diferencias de espacios y saltos de línea),
+  `render.RenderError(ValueError)`.
 
 - [ ] **Step 1: Escribir el contrato de input mínimo**
 
@@ -1190,6 +1279,9 @@ El architect anota los IDs que faltan en el frontmatter (`faltantes: id1, id2`).
 ## Input faltante
 {{faltantes}}
 
+## Drivers de la decisión
+{{drivers}}
+
 ## Evaluación por componente
 | Componente | Estado | Hallazgo |
 |---|---|---|
@@ -1198,17 +1290,34 @@ El architect anota los IDs que faltan en el frontmatter (`faltantes: id1, id2`).
 ## Opciones consideradas
 {{opciones}}
 
+## Decisión
+{{decision}}
+
 ## Recomendación
 {{recomendacion}}
 
 ## Condiciones
 {{condiciones}}
 
+## Consecuencias
+{{consecuencias}}
+
 ## Señales para otros sectores (sin veredicto)
 {{senales}}
 
 ## Veredicto propuesto
 {{veredicto}}
+```
+
+`contract/templates/jsm-cierre.md`:
+```markdown
+Hola {{contacto}}, el pedido {{pry}} ({{nombre}}) estuvo abierto hasta el {{vence}} esperando la información que
+pedimos, y no la recibimos.
+
+Lo cerramos como incompleto en la plataforma de requerimientos. Cuando tengan la información, pueden cargar un pedido
+nuevo y mencionar este ticket: retomamos desde donde quedó.
+
+Equipo de Arquitectura
 ```
 
 `contract/templates/comentario-pry.md`:
@@ -1312,9 +1421,10 @@ from __future__ import annotations
 import unittest
 
 import helpers  # noqa: F401
-from arqlib.render import RenderError, assert_rendered, load_template, render
+from arqlib.render import RenderError, assert_rendered, load_template, matches_template, render
 
-TEMPLATES = ("analisis.md", "comentario-pry.md", "jsm-pedido-info.md", "jsm-devolucion.md", "escalar-rfc.md")
+TEMPLATES = ("analisis.md", "comentario-pry.md", "jsm-pedido-info.md", "jsm-devolucion.md", "jsm-cierre.md",
+             "escalar-rfc.md")
 
 
 class RenderTest(unittest.TestCase):
@@ -1338,6 +1448,26 @@ class RenderTest(unittest.TestCase):
     def test_unknown_template(self):
         with self.assertRaisesRegex(RenderError, "no existe"):
             load_template("../constraints.md")
+
+    def test_filled_template_matches_even_reflowed(self):
+        template = load_template("jsm-cierre.md")
+        text = render(template, {"contacto": "Juan Pablo", "pry": "PRY-2026-0028", "nombre": "PoC",
+                                 "vence": "2026-10-21"})
+        self.assertTrue(matches_template(template, text))
+        self.assertTrue(matches_template(template, " ".join(text.split())))  # otro ajuste de líneas
+
+    def test_multiline_values_match(self):
+        template = load_template("jsm-pedido-info.md")
+        text = render(template, {"contacto": "Juan", "pry": "PRY-2026-0028", "nombre": "PoC",
+                                 "faltantes": "- Fecha de baja\n- Costo mensual", "motivo": "Sin eso no hay caso.",
+                                 "vence": "2026-10-21"})
+        self.assertTrue(matches_template(template, text))
+
+    def test_free_text_or_other_template_does_not_match(self):
+        template = load_template("jsm-devolucion.md")
+        self.assertFalse(matches_template(template, "127.0.0.1 localhost"))
+        cierre = render(load_template("jsm-cierre.md"), {"contacto": "J", "pry": "P", "nombre": "N", "vence": "V"})
+        self.assertFalse(matches_template(template, cierre))
 
 
 if __name__ == "__main__":
@@ -1428,6 +1558,21 @@ def load_template(name: str) -> str:
     if not _NAME.fullmatch(name) or not path.exists():
         raise RenderError(f"la plantilla {name!r} no existe en {CONTRACT / 'templates'}")
     return path.read_text(encoding="utf-8")
+
+
+def _literal(text: str) -> str:
+    return r"\s+".join(re.escape(word) for word in text.split())
+
+
+def matches_template(template: str, text: str) -> bool:
+    """True when `text` is `template` with every placeholder filled, ignoring how whitespace and lines are laid out."""
+    pieces = []
+    for index, part in enumerate(PLACEHOLDER.split(template)):
+        if index % 2:
+            pieces.append(r"(.+?)")
+        elif part.strip():
+            pieces.append(_literal(part))
+    return re.fullmatch(r"\s*".join(pieces), text.strip(), flags=re.S) is not None
 ```
 
 - [ ] **Step 6: Correr y verificar que pasan**
@@ -1451,9 +1596,15 @@ git commit -m "feat: add minimum-input contract, templates and render"
 
 **Interfaces:**
 - Produces: `structure.pry_label(pry: str) -> str` (`"pry:2026-0028"`),
-  `structure.build_plan(meta: Dict[str, str]) -> dict` con forma
+  `structure.base_labels(meta: Dict[str, str]) -> List[str]` (`[pry:..., nivel:...]`),
+  `structure.build_plan(meta: Dict[str, str], validacion: bool = False) -> dict` con forma
   `{"epic": Node, "items": [Node & {"type": "task"|"story", "subtasks": [Node]}]}` donde
-  `Node = {"summary": str, "labels": List[str], "description": str}`, `structure.StructureError(ValueError)`.
+  `Node = {"summary": str, "labels": List[str], "description": str}`;
+  `structure.followup_plan(meta: Dict[str, str], condiciones: List[str]) -> dict` →
+  `{"parent_summary": str, "subtasks": [Node]}` (una sub-task por condición de un "aprobar con condiciones");
+  `structure.StructureError(ValueError)`.
+
+"Validación técnica" solo se crea con `validacion=True` (spec §8: opcional).
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -1464,7 +1615,7 @@ from __future__ import annotations
 import unittest
 
 import helpers  # noqa: F401
-from arqlib.structure import StructureError, build_plan, pry_label
+from arqlib.structure import StructureError, build_plan, followup_plan, pry_label
 
 
 def meta(nivel: str) -> dict:
@@ -1486,15 +1637,33 @@ class StructureTest(unittest.TestCase):
             "Publicar devolución"])
         self.assertEqual(task["subtasks"][0]["labels"], ["pry:2026-0028", "nivel:simple", "track:coordinacion"])
 
-    def test_complejo_has_four_stories(self):
+    def test_complejo_has_three_stories_by_default(self):
         plan = build_plan(meta("complejo"))
         self.assertEqual([i["summary"] for i in plan["items"]], [
-            "Intake y triage", "Análisis y opciones", "Validación técnica", "Decisión y comunicación"])
+            "Intake y triage", "Análisis y opciones", "Decisión y comunicación"])
         self.assertTrue(all(i["type"] == "story" for i in plan["items"]))
-        self.assertEqual(plan["items"][3]["labels"][-2:], ["track:coordinacion", "track:tecnica"])
+        self.assertEqual(plan["items"][2]["labels"][-2:], ["track:coordinacion", "track:tecnica"])
+
+    def test_validacion_tecnica_is_opt_in(self):
+        plan = build_plan(meta("complejo"), validacion=True)
+        self.assertEqual(plan["items"][2]["summary"], "Validación técnica")
+        self.assertEqual(len(plan["items"]), 4)
+
+    def test_followup_one_subtask_per_condition(self):
+        follow = followup_plan(meta("simple"), ["Apagado fuera de horario", "x" * 300])
+        self.assertEqual(follow["parent_summary"], "Revisión PRY-2026-0028")
+        self.assertEqual(follow["subtasks"][0]["summary"], "Condición: Apagado fuera de horario")
+        self.assertLessEqual(len(follow["subtasks"][1]["summary"]), 240)
+        self.assertIn("x" * 300, follow["subtasks"][1]["description"])
+        self.assertEqual(follow["subtasks"][0]["labels"], ["pry:2026-0028", "nivel:simple", "track:coordinacion"])
+        self.assertEqual(followup_plan(meta("complejo"), ["c"])["parent_summary"], "Decisión y comunicación")
+
+    def test_followup_needs_conditions(self):
+        with self.assertRaisesRegex(StructureError, "condición"):
+            followup_plan(meta("simple"), ["  "])
 
     def test_every_issue_carries_pry_and_nivel_and_no_seniority(self):
-        plan = build_plan(meta("complejo"))
+        plan = build_plan(meta("complejo"), validacion=True)
         nodes = [plan["epic"]] + plan["items"] + [s for i in plan["items"] for s in i["subtasks"]]
         for node in nodes:
             self.assertEqual(node["labels"][:2], ["pry:2026-0028", "nivel:complejo"])
@@ -1573,24 +1742,45 @@ def _subtasks(base: List[str], specs: Sequence[Tuple[str, str, str]]) -> List[Di
     return [_node(summary, base + [track], description) for summary, track, description in specs]
 
 
-def build_plan(meta: Dict[str, str]) -> dict:
+def base_labels(meta: Dict[str, str]) -> List[str]:
     nivel = meta.get("nivel", "")
     if nivel not in ("simple", "complejo"):
         raise StructureError("el pedido no tiene nivel: correr `arq triage` primero")
+    return [pry_label(meta.get("pry", "")), f"nivel:{nivel}"]
+
+
+def build_plan(meta: Dict[str, str], validacion: bool = False) -> dict:
+    base = base_labels(meta)
     pry = meta["pry"]
-    base = [pry_label(pry), f"nivel:{nivel}"]
     epic = _node(f"[{pry}] {meta.get('nombre', '')}".strip(), list(base),
                  f"Revisión de Arquitectura del pedido {pry}. Fuente de verdad: reviews/{pry}.md en el repo de reviews.")
-    if nivel == "simple":
+    if meta["nivel"] == "simple":
         task = _node(f"Revisión {pry}", base + [COORD, TEC], "Revisión de nivel simple.")
         task.update(type="task", subtasks=_subtasks(base, SIMPLE_SUBTASKS))
         return {"epic": epic, "items": [task]}
     items = []
     for summary, tracks, description, subtasks in COMPLEX_STORIES:
+        if summary == "Validación técnica" and not validacion:
+            continue
         story = _node(summary, base + list(tracks), description)
         story.update(type="story", subtasks=_subtasks(base, subtasks))
         items.append(story)
     return {"epic": epic, "items": items}
+
+
+def followup_plan(meta: Dict[str, str], condiciones: List[str]) -> dict:
+    base = base_labels(meta)
+    texts = [" ".join(c.split()) for c in condiciones if c.strip()]
+    if not texts:
+        raise StructureError("hace falta al menos una condición")
+    parent = f"Revisión {meta['pry']}" if meta["nivel"] == "simple" else "Decisión y comunicación"
+    subtasks = []
+    for text in texts:
+        summary = f"Condición: {text}"
+        if len(summary) > 240:
+            summary = summary[:237].rstrip() + "..."
+        subtasks.append(_node(summary, base + [COORD], f"Condición de la aprobación, a verificar: {text}"))
+    return {"parent_summary": parent, "subtasks": subtasks}
 ```
 
 - [ ] **Step 4: Correr y verificar que pasa**
@@ -1615,17 +1805,31 @@ git commit -m "feat: build Jira epic structure per triage level"
 **Interfaces:**
 - Produces:
   - `journal.journal(repo: Path, command: str, now: Optional[Callable[[], str]] = None) -> Callable[[dict], None]`
-    (escribe en `.arq/jira-writes.jsonl`, nunca lanza).
+    (escribe en `.arq/jira-writes.jsonl`, nunca lanza); `journal.read_entries(repo: Path) -> List[dict]` (ignora
+    líneas rotas).
   - `jira.Jira(base_url: str, email: str, token: str, opener=None, timeout: float = 20.0, journal=None)` con:
     `search_label(label: str) -> List[Dict[str, Optional[str]]]` (cada uno `{"key", "summary", "parent"}`),
+    `get_brief(key: str) -> Optional[Dict[str, Optional[str]]]` (`None` si no existe),
     `create(fields: dict) -> str`, `link(inward: str, outward: str, link_type: str) -> None`,
-    `create_request(service_desk_id: str, request_type_id: str, summary: str, description: str) -> str`,
-    `comment(key: str, body: str, public: bool) -> None`; `jira.JiraError(RuntimeError)`.
+    `find_user(email: str) -> str` (accountId),
+    `create_request(service_desk_id: str, request_type_id: str, summary: str, description: str,
+    on_behalf_of: str = "") -> str`, `add_participants(key: str, account_ids: List[str]) -> None`,
+    `add_labels(key: str, labels: List[str]) -> None`, `comment(key: str, body: str, public: bool) -> None`;
+    `jira.check_key(key: str) -> str`; `jira.JiraError(RuntimeError)` con atributo `status: Optional[int]`.
 
-Endpoints (Jira Cloud): búsqueda `POST /rest/api/3/search/jql` (paginada con `nextPageToken`), alta
-`POST /rest/api/2/issue`, link `POST /rest/api/2/issueLink`, request JSM `POST /rest/servicedeskapi/request`,
-comentario JSM `POST /rest/servicedeskapi/request/{key}/comment` con `{"body", "public"}`. `public: false` es la nota
-interna; `public: true` es la respuesta al cliente.
+Endpoints (Jira Cloud): búsqueda `POST /rest/api/3/search/jql` (paginada con `nextPageToken`), lectura
+`GET /rest/api/2/issue/{key}?fields=summary,parent`, alta `POST /rest/api/2/issue`, labels
+`PUT /rest/api/2/issue/{key}` con `{"update": {"labels": [{"add": ...}]}}`, link `POST /rest/api/2/issueLink`,
+usuarios `GET /rest/api/3/user/search?query=<email>`, request JSM `POST /rest/servicedeskapi/request` con
+`raiseOnBehalfOf` (accountId del requirente), participantes
+`POST /rest/servicedeskapi/request/{key}/participant` con `{"accountIds": [...]}`, comentario JSM
+`POST /rest/servicedeskapi/request/{key}/comment` con `{"body", "public"}`. `public: false` es la nota interna;
+`public: true` es la respuesta al cliente. Toda clave se valida con `check_key` antes de entrar en una URL.
+
+`find_user`: si la API devuelve el email, se elige la coincidencia exacta (sin distinguir mayúsculas). Si la privacidad
+del sitio lo oculta y hay un solo resultado, se usa ese. Ninguno → error que pide dar de alta al requirente como
+cliente del Service Desk. Varios sin coincidencia exacta → error de ambigüedad. Nunca se crea un ticket a nombre de
+otra persona.
 
 - [ ] **Step 1: Escribir los tests que fallan**
 
@@ -1637,7 +1841,7 @@ import json
 import unittest
 
 import helpers
-from arqlib.journal import journal
+from arqlib.journal import journal, read_entries
 
 
 class JournalTest(unittest.TestCase):
@@ -1655,6 +1859,15 @@ class JournalTest(unittest.TestCase):
         repo = helpers.make_repo()
         (repo / ".arq").write_text("soy un archivo, no una carpeta", encoding="utf-8")
         journal(repo, "jira")({"action": "create"})  # no exception
+
+    def test_read_entries_skips_broken_lines(self):
+        repo = helpers.make_repo()
+        write = journal(repo, "jira", now=lambda: "t")
+        write({"action": "create", "key": "ARQ-1"})
+        with (repo / ".arq" / "jira-writes.jsonl").open("a", encoding="utf-8") as handle:
+            handle.write("{roto\n")
+        self.assertEqual([e["key"] for e in read_entries(repo)], ["ARQ-1"])
+        self.assertEqual(read_entries(helpers.make_repo()), [])
 
 
 if __name__ == "__main__":
@@ -1726,13 +1939,59 @@ class JiraTest(unittest.TestCase):
             "type": {"name": "Relates"}, "inwardIssue": {"key": "JSM-1"}, "outwardIssue": {"key": "ARQ-1"}}))
         self.assertEqual(log[0]["action"], "link")
 
-    def test_create_request(self):
+    def test_create_request_on_behalf_of_requester(self):
         opener = FakeOpener({"issueKey": "JSM-12"})
-        key = client(opener).create_request("3", "41", "PRY-2026-0028 · x", "desc")
+        key = client(opener).create_request("3", "41", "PRY-2026-0028 · x", "desc", on_behalf_of="acc-juan")
         self.assertEqual(key, "JSM-12")
         self.assertEqual(opener.calls[0][2], {"serviceDeskId": "3", "requestTypeId": "41",
                                               "requestFieldValues": {"summary": "PRY-2026-0028 · x",
-                                                                     "description": "desc"}})
+                                                                     "description": "desc"},
+                                              "raiseOnBehalfOf": "acc-juan"})
+
+    def test_create_without_key_in_response_is_a_jira_error(self):
+        with self.assertRaisesRegex(JiraError, "sin clave"):
+            client(FakeOpener({})).create({"summary": "s"})
+
+    def test_find_user_exact_email(self):
+        opener = FakeOpener([{"accountId": "a1", "emailAddress": "user@example.com"},
+                             {"accountId": "a2", "emailAddress": "requester@example.com"}])
+        self.assertEqual(client(opener).find_user("requester@example.com"), "a2")
+        self.assertIn("/rest/api/3/user/search?query=requester%40example.com", opener.calls[0][1])
+
+    def test_find_user_hidden_email_single_result(self):
+        self.assertEqual(client(FakeOpener([{"accountId": "a9"}])).find_user("x@y.com"), "a9")
+
+    def test_find_user_none_or_ambiguous(self):
+        with self.assertRaisesRegex(JiraError, "cliente del Service Desk"):
+            client(FakeOpener([])).find_user("x@y.com")
+        with self.assertRaisesRegex(JiraError, "ambiguo"):
+            client(FakeOpener([{"accountId": "a"}, {"accountId": "b"}])).find_user("x@y.com")
+
+    def test_participants_and_labels(self):
+        opener, log = FakeOpener({}, None), []
+        jira = client(opener, log)
+        jira.add_participants("JSM-12", ["acc-head"])
+        jira.add_labels("JSM-12", ["pry:2026-0028", "nivel:simple"])
+        self.assertEqual(opener.calls[0], ("POST", "https://x.atlassian.net/rest/servicedeskapi/request/JSM-12/participant",
+                                           {"accountIds": ["acc-head"]}))
+        self.assertEqual(opener.calls[1], ("PUT", "https://x.atlassian.net/rest/api/2/issue/JSM-12",
+                                           {"update": {"labels": [{"add": "pry:2026-0028"}, {"add": "nivel:simple"}]}}))
+        self.assertEqual([e["action"] for e in log], ["jsm-participants", "labels"])
+
+    def test_get_brief(self):
+        opener = FakeOpener({"key": "ARQ-2", "fields": {"summary": "s", "parent": {"key": "ARQ-1"}}})
+        self.assertEqual(client(opener).get_brief("ARQ-2"), {"key": "ARQ-2", "summary": "s", "parent": "ARQ-1"})
+        missing = urllib.error.HTTPError("u", 404, "Not Found", {}, io.BytesIO(b"{}"))
+        self.assertIsNone(client(FakeOpener(missing)).get_brief("ARQ-9"))
+
+    def test_keys_are_validated_before_building_urls(self):
+        jira = client(FakeOpener())
+        for call in (lambda: jira.comment("../../rest/api/2/issue/X", "b", public=True),
+                     lambda: jira.link("JSM-1", "ARQ-1/../x", "Relates"),
+                     lambda: jira.add_labels("jsm-1", ["l"]),
+                     lambda: jira.get_brief("")):
+            with self.assertRaisesRegex(JiraError, "clave de Jira inválida"):
+                call()
 
     def test_comment_public_and_internal_are_distinct(self):
         opener, log = FakeOpener({}, {}), []
@@ -1772,7 +2031,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 
 def _utc_now() -> str:
@@ -1794,6 +2053,22 @@ def journal(repo: Path, command: str, now: Optional[Callable[[], str]] = None) -
             pass
 
     return write
+
+
+def read_entries(repo: Path) -> List[dict]:
+    """Every journaled write, oldest first. A broken line is skipped, never fatal."""
+    path = repo / ".arq" / "jira-writes.jsonl"
+    if not path.exists():
+        return []
+    entries: List[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict):
+            entries.append(entry)
+    return entries
 ```
 
 - [ ] **Step 4: Implementar `jira.py`**
@@ -1807,14 +2082,24 @@ import base64
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Callable, Dict, List, Optional
 
 _LABEL = re.compile(r"[\w:.-]+")
+_KEY = re.compile(r"[A-Z][A-Z0-9]+-\d+")
 
 
 class JiraError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: Optional[int] = None):
+        super().__init__(message)
+        self.status = status
+
+
+def check_key(key: str) -> str:
+    if not _KEY.fullmatch(key or ""):
+        raise JiraError(f"clave de Jira inválida {key!r}")
+    return key
 
 
 class Jira:
@@ -1834,7 +2119,8 @@ class Jira:
             with self._open(request, timeout=self._timeout) as response:
                 raw = response.read()
         except urllib.error.HTTPError as exc:
-            raise JiraError(f"{method} {path}: HTTP {exc.code} {exc.read()[:300].decode(errors='replace')}") from exc
+            raise JiraError(f"{method} {path}: HTTP {exc.code} {exc.read()[:300].decode(errors='replace')}",
+                            status=exc.code) from exc
         except urllib.error.URLError as exc:
             raise JiraError(f"{method} {path}: no se pudo conectar ({exc.reason})") from exc
         return json.loads(raw) if raw else {}
@@ -1855,24 +2141,72 @@ class Jira:
                 return found
             body = dict(body, nextPageToken=token)
 
+    def get_brief(self, key: str) -> Optional[Dict[str, Optional[str]]]:
+        check_key(key)
+        try:
+            issue = self._send("GET", f"/rest/api/2/issue/{key}?fields=summary,parent")
+        except JiraError as exc:
+            if exc.status == 404:
+                return None
+            raise
+        fields = issue.get("fields") or {}
+        return {"key": issue.get("key", key), "summary": fields.get("summary"),
+                "parent": (fields.get("parent") or {}).get("key")}
+
     def create(self, fields: dict) -> str:
-        key = self._send("POST", "/rest/api/2/issue", {"fields": fields})["key"]
+        key = self._send("POST", "/rest/api/2/issue", {"fields": fields}).get("key")
+        if not key:
+            raise JiraError("Jira respondió el alta sin clave de issue")
         self._journal({"action": "create", "key": key, "fields": fields})
         return key
 
     def link(self, inward: str, outward: str, link_type: str) -> None:
+        check_key(inward)
+        check_key(outward)
         self._send("POST", "/rest/api/2/issueLink", {"type": {"name": link_type}, "inwardIssue": {"key": inward},
                                                      "outwardIssue": {"key": outward}})
         self._journal({"action": "link", "inward": inward, "outward": outward, "type": link_type})
 
-    def create_request(self, service_desk_id: str, request_type_id: str, summary: str, description: str) -> str:
-        key = self._send("POST", "/rest/servicedeskapi/request", {
-            "serviceDeskId": service_desk_id, "requestTypeId": request_type_id,
-            "requestFieldValues": {"summary": summary, "description": description}})["issueKey"]
+    def find_user(self, email: str) -> str:
+        users = self._send("GET", f"/rest/api/3/user/search?query={urllib.parse.quote(email)}")
+        users = users if isinstance(users, list) else []
+        exact = [u for u in users if (u.get("emailAddress") or "").lower() == email.lower()]
+        if len(exact) == 1:
+            return exact[0]["accountId"]
+        if not users:
+            raise JiraError(f"no se encontró a {email} en Jira: pedir que lo den de alta como cliente del Service "
+                            "Desk y volver a correr")
+        if len(users) == 1 and not users[0].get("emailAddress"):
+            return users[0]["accountId"]  # the site hides emails: a single hit is the only safe match
+        raise JiraError(f"el email {email} es ambiguo en Jira ({len(users)} usuarios): resolverlo a mano")
+
+    def create_request(self, service_desk_id: str, request_type_id: str, summary: str, description: str,
+                       on_behalf_of: str = "") -> str:
+        body = {"serviceDeskId": service_desk_id, "requestTypeId": request_type_id,
+                "requestFieldValues": {"summary": summary, "description": description}}
+        if on_behalf_of:
+            body["raiseOnBehalfOf"] = on_behalf_of
+        key = self._send("POST", "/rest/servicedeskapi/request", body).get("issueKey")
+        if not key:
+            raise JiraError("JSM respondió el alta sin clave de pedido")
         self._journal({"action": "jsm-request", "key": key, "summary": summary})
         return key
 
+    def add_participants(self, key: str, account_ids: List[str]) -> None:
+        check_key(key)
+        self._send("POST", f"/rest/servicedeskapi/request/{key}/participant", {"accountIds": account_ids})
+        self._journal({"action": "jsm-participants", "key": key, "accountIds": account_ids})
+
+    def add_labels(self, key: str, labels: List[str]) -> None:
+        check_key(key)
+        for label in labels:
+            if not _LABEL.fullmatch(label):
+                raise JiraError(f"label inválido {label!r}")
+        self._send("PUT", f"/rest/api/2/issue/{key}", {"update": {"labels": [{"add": label} for label in labels]}})
+        self._journal({"action": "labels", "key": key, "labels": labels})
+
     def comment(self, key: str, body: str, public: bool) -> None:
+        check_key(key)
         self._send("POST", f"/rest/servicedeskapi/request/{key}/comment", {"body": body, "public": public})
         self._journal({"action": "jsm-comment", "key": key, "public": public, "body": body})
 ```
@@ -1900,20 +2234,36 @@ git commit -m "feat: add stdlib Jira and JSM client with write journal"
 **Interfaces:**
 - Consumes: `structure.build_plan` (Task 8), interfaz de `Jira` (Task 9).
 - Produces:
-  - `apply.apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str]) -> Dict[str, object]` →
-    `{"epica": str, "created": List[str], "reused": List[str]}`.
-  - `apply.ensure_request(meta: Dict[str, str], client, config: dict, description: str,
-    on_created: Callable[[str], None]) -> Tuple[str, bool]` → `(clave_jsm, creado)`; llama a `on_created` antes de
-    linkear, para que el CLI guarde la clave aunque el link falle.
+  - `apply.known_from_journal(entries: List[dict], label: str, pry: str) -> Tuple[List[dict], List[str]]` →
+    `(issues {"key","summary","parent"} creados con ese label, claves JSM creadas para ese PRY)`.
+  - `apply.apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
+    known: Sequence[dict] = ()) -> Dict[str, object]` → `{"epica": str, "created": List[str], "reused": List[str]}`.
+  - `apply.apply_followups(follow: dict, label: str, client, project: str, issue_types: Dict[str, str],
+    known: Sequence[dict] = ()) -> Dict[str, object]` → `{"created": List[str], "reused": List[str]}`.
+  - `apply.ensure_request(meta: Dict[str, str], client, config: dict, description: str, labels: List[str],
+    on_created: Callable[[str], None], on_ready: Callable[[], None], known_jsm: Sequence[str] = ())
+    -> Tuple[str, bool]` → `(clave_jsm, creado)`.
   - `preview.render_html(plan: dict, meta: Dict[str, str]) -> str`.
   - `tests.helpers.FakeJira(project="ARQ", fail_on_create: Optional[int] = None)` con la misma interfaz que `Jira`
-    y los atributos `issues`, `links`, `comments`, `requests`.
+    y los atributos `issues`, `links`, `comments`, `requests`, `participants`, `users` (email → accountId),
+    `hidden` (claves que la búsqueda todavía no devuelve, como la consistencia eventual de `search/jql`) y
+    `fail_link` (el link lanza `JiraError`).
+
+**Idempotencia, en tres capas:** (1) búsqueda por label `pry:`; (2) las claves que el journal registra y la búsqueda
+todavía no devuelve se confirman con `get_brief` (la búsqueda de Jira Cloud es eventualmente consistente);
+(3) en JSM, `jsm` se guarda apenas existe el pedido y `jsm_listo=si` recién cuando tiene labels, participantes y link.
+Un re-run con `jsm` y sin `jsm_listo` completa lo que falta. Supuesto a verificar en la primera corrida real: repetir
+`add_labels` (operación `add`), `add_participants` y un link idéntico no duplica nada en Jira.
 
 - [ ] **Step 1: Agregar `FakeJira` a `tests/helpers.py`**
 
 Agregar al final de `tests/helpers.py`:
 ```python
-from typing import Dict, List, Optional  # noqa: E402
+from typing import Dict, List, Optional, Set  # noqa: E402
+
+from arqlib.jira import JiraError  # noqa: E402
+
+USERS = {"requester@example.com": "acc-pablo", "reviewer@example.com": "acc-felipe"}
 
 
 class FailingJira(RuntimeError):
@@ -1932,10 +2282,18 @@ class FakeJira:
         self.links: List[tuple] = []
         self.comments: List[tuple] = []
         self.requests: List[str] = []
+        self.participants: List[tuple] = []
+        self.users: Dict[str, str] = dict(USERS)
+        self.hidden: Set[str] = set()  # created but not yet visible to search (eventual consistency)
+        self.fail_link = False
 
     def search_label(self, label: str) -> List[dict]:
         return [{"key": k, "summary": i["summary"], "parent": i["parent"]}
-                for k, i in self.issues.items() if label in i["labels"]]
+                for k, i in self.issues.items() if label in i["labels"] and k not in self.hidden]
+
+    def get_brief(self, key: str) -> Optional[dict]:
+        issue = self.issues.get(key)
+        return {"key": key, "summary": issue["summary"], "parent": issue["parent"]} if issue else None
 
     def create(self, fields: dict) -> str:
         self.creates += 1
@@ -1943,17 +2301,35 @@ class FakeJira:
             raise FailingJira(f"HTTP 400 en el alta #{self.creates}")
         key = f"{self.project}-{self.seq}"
         self.seq += 1
-        self.issues[key] = {"summary": fields["summary"], "labels": fields.get("labels", []),
+        self.issues[key] = {"summary": fields["summary"], "labels": list(fields.get("labels", [])),
                             "type": fields["issuetype"]["name"], "parent": (fields.get("parent") or {}).get("key")}
         return key
 
     def link(self, inward: str, outward: str, link_type: str) -> None:
-        self.links.append((inward, outward, link_type))
+        if self.fail_link:
+            raise JiraError("POST /rest/api/2/issueLink: HTTP 404")
+        if (inward, outward, link_type) not in self.links:
+            self.links.append((inward, outward, link_type))
 
-    def create_request(self, service_desk_id: str, request_type_id: str, summary: str, description: str) -> str:
+    def find_user(self, email: str) -> str:
+        if email not in self.users:
+            raise JiraError(f"no se encontró a {email} en Jira: pedir que lo den de alta como cliente del Service Desk")
+        return self.users[email]
+
+    def create_request(self, service_desk_id: str, request_type_id: str, summary: str, description: str,
+                       on_behalf_of: str = "") -> str:
         key = f"JSM-{len(self.requests) + 1}"
         self.requests.append(key)
+        self.issues[key] = {"summary": summary, "labels": [], "type": "request", "parent": None,
+                            "reporter": on_behalf_of}
         return key
+
+    def add_participants(self, key: str, account_ids: List[str]) -> None:
+        self.participants += [(key, a) for a in account_ids if (key, a) not in self.participants]
+
+    def add_labels(self, key: str, labels: List[str]) -> None:
+        current = self.issues[key]["labels"]
+        current += [label for label in labels if label not in current]
 
     def comment(self, key: str, body: str, public: bool) -> None:
         self.comments.append((key, body, public))
@@ -1968,9 +2344,10 @@ from __future__ import annotations
 import unittest
 
 import helpers
-from arqlib.apply import apply_plan, ensure_request
+from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal
 from arqlib.config import DEFAULT_CONFIG
-from arqlib.structure import build_plan
+from arqlib.jira import JiraError
+from arqlib.structure import build_plan, followup_plan
 
 TYPES = DEFAULT_CONFIG["issue_types"]
 
@@ -2006,11 +2383,57 @@ class ApplyTest(unittest.TestCase):
         self.assertEqual((len(result["reused"]), len(result["created"])), (3, 4))
         self.assertEqual(len(jira.issues), 7)
 
-    def test_complejo_creates_epic_four_stories_and_their_subtasks(self):
+    def test_complejo_creates_epic_three_stories_and_their_subtasks(self):
         jira = helpers.FakeJira()
         apply_plan(plan("complejo"), jira, "ARQ", TYPES)
-        self.assertEqual(len(jira.issues), 1 + 4 + 9)
-        self.assertEqual(sum(1 for i in jira.issues.values() if i["type"] == "Story"), 4)
+        self.assertEqual(len(jira.issues), 1 + 3 + 8)
+        self.assertEqual(sum(1 for i in jira.issues.values() if i["type"] == "Story"), 3)
+
+    def test_journal_covers_search_lag(self):
+        jira = helpers.FakeJira(fail_on_create=4)
+        with self.assertRaises(helpers.FailingJira):
+            apply_plan(plan(), jira, "ARQ", TYPES)
+        jira.fail_on_create = None
+        jira.hidden = set(jira.issues)  # la búsqueda todavía no ve lo recién creado
+        known = [{"key": k, "summary": i["summary"], "parent": i["parent"]} for k, i in jira.issues.items()]
+        result = apply_plan(plan(), jira, "ARQ", TYPES, known=known)
+        self.assertEqual((len(result["reused"]), len(result["created"])), (3, 4))
+        self.assertEqual(len(jira.issues), 7)
+
+    def test_journal_entry_for_a_deleted_issue_is_ignored(self):
+        jira = helpers.FakeJira()
+        known = [{"key": "ARQ-99", "summary": "[PRY-2026-0028] PoC", "parent": None}]
+        self.assertEqual(apply_plan(plan(), jira, "ARQ", TYPES, known=known)["epica"], "ARQ-1")
+
+    def test_known_from_journal(self):
+        entries = [
+            {"action": "create", "key": "ARQ-1", "fields": {"summary": "E", "labels": ["pry:2026-0028"]}},
+            {"action": "create", "key": "ARQ-2", "fields": {"summary": "T", "labels": ["pry:2026-0028"],
+                                                            "parent": {"key": "ARQ-1"}}},
+            {"action": "create", "key": "ARQ-3", "fields": {"summary": "otro", "labels": ["pry:2026-0001"]}},
+            {"action": "jsm-request", "key": "SD-4", "summary": "PRY-2026-0028 · PoC"},
+            {"action": "jsm-request", "key": "SD-5", "summary": "PRY-2026-0001 · otro"},
+        ]
+        issues, jsm = known_from_journal(entries, "pry:2026-0028", "PRY-2026-0028")
+        self.assertEqual(issues, [{"key": "ARQ-1", "summary": "E", "parent": None},
+                                  {"key": "ARQ-2", "summary": "T", "parent": "ARQ-1"}])
+        self.assertEqual(jsm, ["SD-4"])
+
+    def test_followups_hang_from_the_review_task_and_are_idempotent(self):
+        jira = helpers.FakeJira()
+        meta = {"pry": "PRY-2026-0028", "nombre": "PoC", "nivel": "simple"}
+        apply_plan(plan(), jira, "ARQ", TYPES)
+        follow = followup_plan(meta, ["Apagado fuera de horario"])
+        first = apply_followups(follow, "pry:2026-0028", jira, "ARQ", TYPES)
+        again = apply_followups(follow, "pry:2026-0028", jira, "ARQ", TYPES)
+        [key] = first["created"]
+        self.assertEqual(jira.issues[key]["parent"], "ARQ-2")  # la task "Revisión PRY-2026-0028"
+        self.assertEqual(again["created"], [])
+
+    def test_followups_need_the_epic_structure(self):
+        follow = followup_plan({"pry": "PRY-2026-0028", "nivel": "simple"}, ["c"])
+        with self.assertRaisesRegex(ValueError, "arq jira"):
+            apply_followups(follow, "pry:2026-0028", helpers.FakeJira(), "ARQ", TYPES)
 
     def test_same_subtask_summary_under_different_parents_is_not_confused(self):
         jira = helpers.FakeJira()
@@ -2023,18 +2446,73 @@ class ApplyTest(unittest.TestCase):
         self.assertEqual(len(jira.issues), 5)  # épica + 2 stories + 2 sub-tasks con el mismo nombre
         self.assertEqual(again["created"], [])
 
-    def test_ensure_request_creates_saves_then_links(self):
-        jira, saved = helpers.FakeJira(), []
-        meta = {"pry": "PRY-2026-0028", "nombre": "PoC", "epica": "ARQ-1", "jsm": ""}
-        config = dict(DEFAULT_CONFIG, jsm_service_desk_id="3", jsm_request_type_id="41")
-        key, created = ensure_request(meta, jira, config, "desc", saved.append)
-        self.assertEqual((key, created, saved), ("JSM-1", True, ["JSM-1"]))
+
+LABELS = ["pry:2026-0028", "nivel:simple"]
+CONFIG = dict(DEFAULT_CONFIG, jsm_project="JSM", jsm_service_desk_id="3", jsm_request_type_id="41")
+
+
+def request_meta(**extra: str) -> dict:
+    meta = {"pry": "PRY-2026-0028", "nombre": "PoC", "epica": "ARQ-1", "jsm": "", "jsm_listo": "",
+            "contacto": "requester@example.com", "head": "reviewer@example.com"}
+    meta.update(extra)
+    return meta
+
+
+class EnsureRequestTest(unittest.TestCase):
+    def call(self, jira, meta, known_jsm=()):
+        saved, ready = [], []
+        result = ensure_request(meta, jira, CONFIG, "desc", LABELS, saved.append, lambda: ready.append(True),
+                                known_jsm=known_jsm)
+        return result, saved, ready
+
+    def test_creates_on_behalf_of_requester_with_labels_head_and_link(self):
+        jira = helpers.FakeJira()
+        (key, created), saved, ready = self.call(jira, request_meta())
+        self.assertEqual((key, created, saved, ready), ("JSM-1", True, ["JSM-1"], [True]))
+        self.assertEqual(jira.issues["JSM-1"]["reporter"], "acc-pablo")
+        self.assertEqual(jira.issues["JSM-1"]["labels"], LABELS)
+        self.assertEqual(jira.participants, [("JSM-1", "acc-felipe")])
         self.assertEqual(jira.links, [("JSM-1", "ARQ-1", "Relates")])
 
-    def test_ensure_request_skips_when_present(self):
+    def test_unknown_requester_creates_nothing(self):
         jira = helpers.FakeJira()
-        key, created = ensure_request({"jsm": "JSM-9", "epica": "ARQ-1"}, jira, DEFAULT_CONFIG, "d", lambda k: None)
-        self.assertEqual((key, created, jira.requests), ("JSM-9", False, []))
+        with self.assertRaisesRegex(JiraError, "cliente del Service Desk"):
+            self.call(jira, request_meta(contacto="user@example.com"))
+        self.assertEqual(jira.requests, [])
+
+    def test_ready_request_is_skipped(self):
+        jira = helpers.FakeJira()
+        (key, created), saved, ready = self.call(jira, request_meta(jsm="JSM-9", jsm_listo="si"))
+        self.assertEqual((key, created, jira.requests, saved, ready), ("JSM-9", False, [], [], []))
+
+    def test_rerun_after_link_failure_finishes_the_link(self):
+        jira = helpers.FakeJira()
+        jira.fail_link = True
+        meta = request_meta()
+        with self.assertRaises(JiraError):
+            self.call(jira, meta)
+        jira.fail_link = False
+        (key, created), _, ready = self.call(jira, request_meta(jsm="JSM-1"))
+        self.assertEqual((key, created, ready, jira.requests), ("JSM-1", False, [True], ["JSM-1"]))
+        self.assertEqual(jira.links, [("JSM-1", "ARQ-1", "Relates")])
+
+    def test_existing_request_found_by_label_is_not_duplicated(self):
+        jira = helpers.FakeJira(project="JSM")
+        jira.create_request("3", "41", "PRY-2026-0028 · PoC", "d")
+        jira.add_labels("JSM-1", LABELS)
+        (key, created), saved, _ = self.call(jira, request_meta())
+        self.assertEqual((key, created, saved, jira.requests), ("JSM-1", False, ["JSM-1"], ["JSM-1"]))
+
+    def test_existing_request_from_journal_covers_search_lag(self):
+        jira = helpers.FakeJira()
+        jira.create_request("3", "41", "PRY-2026-0028 · PoC", "d")  # creado, pero sin labels todavía
+        (key, created), _, _ = self.call(jira, request_meta(), known_jsm=["JSM-1"])
+        self.assertEqual((key, created, jira.requests), ("JSM-1", False, ["JSM-1"]))
+
+    def test_without_head_there_are_no_participants(self):
+        jira = helpers.FakeJira()
+        self.call(jira, request_meta(head=""))
+        self.assertEqual(jira.participants, [])
 
 
 if __name__ == "__main__":
@@ -2081,10 +2559,43 @@ Expected: FAIL con `No module named 'arqlib.apply'` y `'arqlib.preview'`
 
 `arqlib/apply.py`:
 ```python
-"""Apply a structure plan to Jira idempotently: issues are matched by (summary, parent) under the pry: label."""
+"""Apply a structure plan to Jira idempotently.
+
+Issues are matched by (summary, parent) among (1) a search by the pry: label and (2) the keys the journal recorded,
+confirmed one by one, because Jira Cloud's search/jql is eventually consistent and may miss what was just created.
+"""
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
+
+
+class ApplyError(ValueError):
+    pass
+
+
+def known_from_journal(entries: List[dict], label: str, pry: str) -> Tuple[List[dict], List[str]]:
+    issues: List[dict] = []
+    jsm: List[str] = []
+    for entry in entries:
+        fields = entry.get("fields") or {}
+        if entry.get("action") == "create" and label in (fields.get("labels") or []):
+            issues.append({"key": entry.get("key"), "summary": fields.get("summary"),
+                           "parent": (fields.get("parent") or {}).get("key")})
+        elif entry.get("action") == "jsm-request" and str(entry.get("summary", "")).startswith(f"{pry} "):
+            jsm.append(entry.get("key"))
+    return issues, jsm
+
+
+def _index(client, label: str, known: Sequence[dict]) -> Dict[Tuple[str, Optional[str]], str]:
+    found = client.search_label(label)
+    seen = {issue["key"] for issue in found}
+    for entry in known:
+        if entry.get("key") and entry["key"] not in seen:
+            brief = client.get_brief(entry["key"])
+            if brief is not None:
+                found.append(brief)
+                seen.add(brief["key"])
+    return {(issue["summary"], issue["parent"]): issue["key"] for issue in found}
 
 
 def _fields(project: str, issue_type: str, node: dict, parent: Optional[str]) -> dict:
@@ -2095,39 +2606,81 @@ def _fields(project: str, issue_type: str, node: dict, parent: Optional[str]) ->
     return fields
 
 
-def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str]) -> Dict[str, object]:
-    label = plan["epic"]["labels"][0]
-    existing = {(issue["summary"], issue["parent"]): issue["key"] for issue in client.search_label(label)}
-    created: List[str] = []
-    reused: List[str] = []
+class _Ensurer:
+    def __init__(self, client, project: str, existing: Dict[Tuple[str, Optional[str]], str]):
+        self.client, self.project, self.existing = client, project, existing
+        self.created: List[str] = []
+        self.reused: List[str] = []
 
-    def ensure(node: dict, issue_type: str, parent: Optional[str]) -> str:
-        key = existing.get((node["summary"], parent))
+    def __call__(self, node: dict, issue_type: str, parent: Optional[str]) -> str:
+        key = self.existing.get((node["summary"], parent))
         if key:
-            reused.append(key)
+            self.reused.append(key)
             return key
-        key = client.create(_fields(project, issue_type, node, parent))
-        existing[(node["summary"], parent)] = key
-        created.append(key)
+        key = self.client.create(_fields(self.project, issue_type, node, parent))
+        self.existing[(node["summary"], parent)] = key
+        self.created.append(key)
         return key
 
+
+def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
+               known: Sequence[dict] = ()) -> Dict[str, object]:
+    ensure = _Ensurer(client, project, _index(client, plan["epic"]["labels"][0], known))
     epic = ensure(plan["epic"], issue_types["epic"], None)
     for item in plan["items"]:
         item_key = ensure(item, issue_types[item["type"]], epic)
         for sub in item["subtasks"]:
             ensure(sub, issue_types["subtask"], item_key)
-    return {"epica": epic, "created": created, "reused": reused}
+    return {"epica": epic, "created": ensure.created, "reused": ensure.reused}
 
 
-def ensure_request(meta: Dict[str, str], client, config: dict, description: str,
-                   on_created: Callable[[str], None]) -> Tuple[str, bool]:
-    if meta.get("jsm"):
+def apply_followups(follow: dict, label: str, client, project: str, issue_types: Dict[str, str],
+                    known: Sequence[dict] = ()) -> Dict[str, object]:
+    existing = _index(client, label, known)
+    parents = [key for (summary, _), key in existing.items() if summary == follow["parent_summary"]]
+    if not parents:
+        raise ApplyError(f"no existe {follow['parent_summary']!r} en Jira: correr `arq jira` con --apply primero")
+    ensure = _Ensurer(client, project, existing)
+    for sub in follow["subtasks"]:
+        ensure(sub, issue_types["subtask"], parents[0])
+    return {"created": ensure.created, "reused": ensure.reused}
+
+
+def _existing_request(client, config: dict, label: str, known_jsm: Sequence[str]) -> Optional[str]:
+    prefix = f"{config['jsm_project']}-"
+    for issue in client.search_label(label):
+        if issue["key"].startswith(prefix):
+            return issue["key"]
+    for key in known_jsm:
+        if key and client.get_brief(key) is not None:
+            return key
+    return None
+
+
+def ensure_request(meta: Dict[str, str], client, config: dict, description: str, labels: List[str],
+                   on_created: Callable[[str], None], on_ready: Callable[[], None],
+                   known_jsm: Sequence[str] = ()) -> Tuple[str, bool]:
+    """Create (or find) the JSM request on behalf of the requester, then label, add the head and link it.
+
+    `on_created` runs as soon as the key is known, so a later failure never loses it; `on_ready` runs only when every
+    step is done. A re-run with a key but not ready repeats the remaining idempotent steps.
+    """
+    if meta.get("jsm") and meta.get("jsm_listo"):
         return meta["jsm"], False
-    key = client.create_request(str(config["jsm_service_desk_id"]), str(config["jsm_request_type_id"]),
-                                f"{meta['pry']} · {meta.get('nombre', '')}", description)
+    key = meta.get("jsm") or _existing_request(client, config, labels[0], known_jsm)
+    created = False
+    if not key:
+        requester = client.find_user(meta["contacto"])  # before creating: never raise a ticket on someone else's behalf
+        key = client.create_request(str(config["jsm_service_desk_id"]), str(config["jsm_request_type_id"]),
+                                    f"{meta['pry']} · {meta.get('nombre', '')}", description, on_behalf_of=requester)
+        created = True
     on_created(key)
+    client.add_labels(key, labels)
+    if meta.get("head"):
+        client.add_participants(key, [client.find_user(meta["head"])])
     client.link(key, meta["epica"], config["link_type"])
-    return key, True
+    on_ready()
+    return key, created
 ```
 
 - [ ] **Step 5: Implementar `preview.py`**
@@ -2400,10 +2953,13 @@ git commit -m "feat: validate architect-written fields and verdict matrix"
 ---
 pry: PRY-2026-0028
 nombre: PoC modelos IA Locales
+contacto: requester@example.com
+head: reviewer@example.com
 estado: esperando-info
 nivel: simple
 epica: ARQ-1
 jsm: JSM-1
+jsm_listo: si
 vence: 2026-10-21
 firmante:
 resultado:
@@ -2613,8 +3169,18 @@ git commit -m "feat: add golden-case rubric with PRY-2026-0026 and PRY-2026-0028
 - Consumes: todo lo anterior.
 - Produces: `cli.main(argv: Optional[List[str]] = None, env: Optional[Mapping[str, str]] = None,
   cwd: Optional[str] = None, client_factory: Optional[Callable[[], object]] = None,
-  today: Optional[date] = None) -> int`. Subcomandos: `init`, `path`, `new`, `show`, `triage`, `set`, `state`,
-  `timebox`, `lint`, `jira`, `jsm`, `link`, `eval`.
+  today: Optional[date] = None) -> int`, `cli.build_parser() -> argparse.ArgumentParser`. Subcomandos: `init`,
+  `path`, `new`, `show`, `triage`, `set`, `state`, `timebox`, `lint`, `jira`, `jsm`, `seguimiento`, `link`, `eval`.
+
+Reglas que aplica el CLI (además de las de cada módulo):
+- `triage` se puede repetir mientras el pedido no tenga épica; con épica, el nivel queda fijo.
+- `jsm --public` exige `--template` (`jsm-pedido-info.md`, `jsm-devolucion.md` o `jsm-cierre.md`), que el texto siga
+  esa plantilla (`matches_template`) y el estado que le corresponde: `esperando-info`, `publicado` y
+  `propuesta-rechazo` respectivamente. Así una devolución nunca sale antes de la firma. `--internal` acepta texto libre.
+- `seguimiento` crea una sub-task por condición, solo con `veredicto=aprobar-con-condiciones` y estado `publicado` o
+  `cerrado`.
+- `jira --apply` lee el journal para cubrir la demora de la búsqueda, y deja `jsm_listo=si` solo cuando el pedido JSM
+  tiene labels, participantes y link. Si algo falla, el mismo comando completa lo que falta.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -2630,12 +3196,13 @@ from datetime import date
 
 import helpers
 from arqlib.cli import main
-from arqlib.jira import JiraError
+from arqlib.render import load_template, render
 from arqlib.review import load
 
 ALL_NO = ("multi_cuenta=no,migracion=no,fecha_comprometida=no,otros_equipos=no,"
           "datos_sensibles_o_ia=no,larga_o_productiva=no")
 PRY = "PRY-2026-0028"
+CONTACTO = "requester@example.com"
 
 
 def run(repo, *argv, fake=None, env=None, today=date(2026, 10, 7)):
@@ -2651,16 +3218,30 @@ def ready_repo():
     run(repo, "init")
     path = repo / ".arq" / "config.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data.update(jsm_service_desk_id="3", jsm_request_type_id="41")
+    data.update(jsm_project="JSM", jsm_service_desk_id="3", jsm_request_type_id="41")
     path.write_text(json.dumps(data), encoding="utf-8")
     (repo / "pedido.txt").write_text("Habilitar una G6e.xlarge", encoding="utf-8")
-    run(repo, "new", PRY, "--nombre", "PoC modelos IA Locales", "--pedido", str(repo / "pedido.txt"))
+    run(repo, "new", PRY, "--nombre", "PoC modelos IA Locales", "--pedido", str(repo / "pedido.txt"),
+        "--contacto", CONTACTO, "--head", "reviewer@example.com")
     return repo
 
 
-class LinkFails(helpers.FakeJira):
-    def link(self, inward, outward, link_type):
-        raise JiraError("POST /rest/api/2/issueLink: HTTP 404")
+def opened_repo(fake):
+    repo = ready_repo()
+    run(repo, "triage", PRY, "--answers", ALL_NO)
+    run(repo, "jira", PRY, "--apply", fake=fake)
+    return repo
+
+
+def write(repo, name, text):
+    (repo / name).write_text(text, encoding="utf-8")
+    return str(repo / name)
+
+
+def pedido_info():
+    return render(load_template("jsm-pedido-info.md"), {
+        "contacto": "Juan Pablo", "pry": PRY, "nombre": "PoC", "faltantes": "- Fecha de baja",
+        "motivo": "Sin fecha de baja no se puede estimar el costo.", "vence": "2026-10-21"})
 
 
 class CliTest(unittest.TestCase):
@@ -2677,38 +3258,91 @@ class CliTest(unittest.TestCase):
         code, out, _ = run(repo, "jira", PRY, "--apply", fake=fake)
         self.assertEqual(code, 0)
         meta, _ = load(repo, PRY)
-        self.assertEqual((meta["epica"], meta["jsm"]), ("ARQ-1", "JSM-1"))
+        self.assertEqual((meta["epica"], meta["jsm"], meta["jsm_listo"]), ("ARQ-1", "JSM-1", "si"))
+        self.assertEqual(fake.issues["JSM-1"]["reporter"], "acc-pablo")
         self.assertEqual(fake.links, [("JSM-1", "ARQ-1", "Relates")])
 
         self.assertIn("vence: 2026-10-21 (en plazo)", run(repo, "timebox", PRY)[1])
         self.assertEqual(run(repo, "state", PRY, "--to", "esperando-info")[0], 0)
+        self.assertEqual(run(repo, "state", PRY, "--to", "esperando-info")[0], 0)  # repetir no rompe
         self.assertEqual(run(repo, "set", PRY, "faltantes=costo_estimado", "senales=finops")[0], 0)
 
         code, _, err = run(repo, "set", PRY, "veredicto=aprobar")
         self.assertEqual(code, 1)
         self.assertIn("input faltante", err)
 
-    def test_jsm_reply_is_dry_run_until_apply_and_refuses_placeholders(self):
+    def test_retriage_until_the_epic_exists(self):
         repo, fake = ready_repo(), helpers.FakeJira()
         run(repo, "triage", PRY, "--answers", ALL_NO)
+        code, out, _ = run(repo, "triage", PRY, "--answers", ALL_NO.replace("migracion=no", "migracion=si"))
+        self.assertEqual((code, out), (0, "nivel: complejo\n"))
         run(repo, "jira", PRY, "--apply", fake=fake)
-        (repo / "bad.md").write_text("Hola {{contacto}}", encoding="utf-8")
-        code, _, err = run(repo, "jsm", PRY, "--file", str(repo / "bad.md"), "--public", fake=fake)
+        code, _, err = run(repo, "triage", PRY, "--answers", ALL_NO)
+        self.assertEqual(code, 1)
+        self.assertIn("épica", err)
+
+    def test_public_reply_needs_matching_template_and_state(self):
+        fake = helpers.FakeJira()
+        repo = opened_repo(fake)
+        run(repo, "state", PRY, "--to", "esperando-info")
+        info = write(repo, "info.md", pedido_info())
+
+        code, _, err = run(repo, "jsm", PRY, "--file", info, "--public", fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn("--template", err)
+
+        bad = write(repo, "bad.md", "Hola {{contacto}}")
+        code, _, err = run(repo, "jsm", PRY, "--file", bad, "--public", "--template", "jsm-pedido-info.md", fake=fake)
         self.assertEqual(code, 1)
         self.assertIn("placeholders", err)
 
-        (repo / "ok.md").write_text("Hola Juan Pablo, necesitamos la fecha de baja.", encoding="utf-8")
-        code, out, _ = run(repo, "jsm", PRY, "--file", str(repo / "ok.md"), "--public", fake=fake)
+        free = write(repo, "free.md", "127.0.0.1 localhost")
+        code, _, err = run(repo, "jsm", PRY, "--file", free, "--public", "--template", "jsm-pedido-info.md", fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn("no sigue la plantilla", err)
+
+        devolucion = write(repo, "dev.md", render(load_template("jsm-devolucion.md"), {
+            "contacto": "Juan Pablo", "pry": PRY, "nombre": "PoC", "veredicto": "Aprobado con condiciones",
+            "resumen": "r", "recomendaciones": "- r", "condiciones": "- c", "senales": "- s", "link": "https://x"}))
+        code, _, err = run(repo, "jsm", PRY, "--file", devolucion, "--public", "--template", "jsm-devolucion.md",
+                           fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn("se publica en estado publicado", err)  # una devolución nunca sale antes de la firma
+
+        code, out, _ = run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md", fake=fake)
         self.assertEqual((code, fake.comments), (0, []))
         self.assertIn("respuesta pública", out)
-        run(repo, "jsm", PRY, "--file", str(repo / "ok.md"), "--public", "--apply", fake=fake)
-        run(repo, "jsm", PRY, "--file", str(repo / "ok.md"), "--internal", "--apply", fake=fake)
+        run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md", "--apply", fake=fake)
+        run(repo, "jsm", PRY, "--file", free, "--internal", "--apply", fake=fake)
         self.assertEqual([c[2] for c in fake.comments], [True, False])
+
+    def test_followups_only_for_published_conditional_approval(self):
+        fake = helpers.FakeJira()
+        repo = opened_repo(fake)
+        code, _, err = run(repo, "seguimiento", PRY, "Apagado fuera de horario", fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn("aprobar-con-condiciones", err)
+
+        run(repo, "state", PRY, "--to", "en-analisis")
+        run(repo, "set", PRY, "veredicto=aprobar-con-condiciones")
+        run(repo, "state", PRY, "--to", "en-firma")
+        run(repo, "set", PRY, "firmante=edgardo.costilla")
+        self.assertEqual(run(repo, "state", PRY, "--to", "publicado")[0], 0)
+
+        code, out, _ = run(repo, "seguimiento", PRY, "Apagado fuera de horario", fake=fake)
+        self.assertEqual(code, 0)
+        self.assertIn("Condición: Apagado fuera de horario", out)
+        before = len(fake.issues)
+        run(repo, "seguimiento", PRY, "Apagado fuera de horario", "--apply", fake=fake)
+        run(repo, "seguimiento", PRY, "Apagado fuera de horario", "--apply", fake=fake)
+        self.assertEqual(len(fake.issues), before + 1)
+        self.assertEqual(run(repo, "state", PRY, "--to", "cerrado", "--resultado", "aprobado")[0], 1)
+        self.assertEqual(run(repo, "state", PRY, "--to", "cerrado", "--resultado", "condicionado")[0], 0)
 
     def test_bad_pry_never_touches_disk(self):
         repo = helpers.make_repo()
         run(repo, "init")
-        code, _, err = run(repo, "new", "../../x", "--nombre", "x", "--pedido", "-")
+        code, _, err = run(repo, "new", "../../x", "--nombre", "x", "--pedido", "-", "--contacto", CONTACTO)
         self.assertEqual(code, 1)
         self.assertIn("PRY inválido", err)
         self.assertEqual(list((repo / "reviews").iterdir()), [])
@@ -2720,13 +3354,18 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("JIRA_API_TOKEN", err)
 
-    def test_link_failure_keeps_jsm_key_and_says_how_to_finish(self):
-        repo = ready_repo()
+    def test_link_failure_is_completed_by_rerunning(self):
+        repo, fake = ready_repo(), helpers.FakeJira()
         run(repo, "triage", PRY, "--answers", ALL_NO)
-        code, _, err = run(repo, "jira", PRY, "--apply", fake=LinkFails())
+        fake.fail_link = True
+        code, _, err = run(repo, "jira", PRY, "--apply", fake=fake)
         self.assertEqual(code, 1)
-        self.assertIn("arq link JSM-1 ARQ-1 --apply", err)
-        self.assertEqual(load(repo, PRY)[0]["jsm"], "JSM-1")
+        self.assertIn("volver a correr", err)
+        self.assertEqual((load(repo, PRY)[0]["jsm"], load(repo, PRY)[0]["jsm_listo"]), ("JSM-1", ""))
+        fake.fail_link = False
+        self.assertEqual(run(repo, "jira", PRY, "--apply", fake=fake)[0], 0)
+        self.assertEqual(load(repo, PRY)[0]["jsm_listo"], "si")
+        self.assertEqual(fake.requests, ["JSM-1"])
 
     def test_overdue_timebox_suggests_rejection_proposal(self):
         repo = ready_repo()
@@ -2744,6 +3383,11 @@ class CliTest(unittest.TestCase):
         code, out, _ = run(repo, "lint", "--file", str(repo / "c.md"))
         self.assertEqual(code, 1)
         self.assertIn("severidad inválida", out)
+
+    def test_link_validates_keys(self):
+        code, _, err = run(ready_repo(), "link", "JSM-1", "../x")
+        self.assertEqual(code, 1)
+        self.assertIn("clave de Jira inválida", err)
 
     def test_usage_error_exits_2(self):
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
@@ -2774,7 +3418,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -2782,20 +3425,21 @@ from typing import Callable, List, Mapping, Optional
 
 from arqlib import config as cfg
 from arqlib import fields, review, state, triage
-from arqlib.apply import apply_plan, ensure_request
+from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal
 from arqlib.constraints import lint
 from arqlib.evaluate import evaluate_files
-from arqlib.jira import Jira, JiraError
-from arqlib.journal import journal
+from arqlib.jira import Jira, JiraError, check_key
+from arqlib.journal import journal, read_entries
 from arqlib.paths import CONTRACT
 from arqlib.preview import render_html
-from arqlib.render import assert_rendered
-from arqlib.structure import build_plan
+from arqlib.render import assert_rendered, load_template, matches_template
+from arqlib.structure import base_labels, build_plan, followup_plan
 from arqlib.timebox import add_business_days, is_overdue
 
-_KEY = re.compile(r"[A-Z][A-Z0-9]+-\d+")
 APPLY_HINT = ("dry run: no se escribió nada. Para ejecutarlo, el usuario corre el mismo comando con --apply "
               "(en Claude Code, con !).")
+PUBLIC_TEMPLATES = {"jsm-pedido-info.md": "esperando-info", "jsm-devolucion.md": "publicado",
+                    "jsm-cierre.md": "propuesta-rechazo"}
 
 
 class Context:
@@ -2823,8 +3467,9 @@ def _path(ctx: Context, args) -> int:
 
 def _new(ctx: Context, args) -> int:
     review.check_pry(args.pry)
+    review.check_email(args.contacto)
     pedido = sys.stdin.read() if args.pedido == "-" else Path(args.pedido).read_text(encoding="utf-8")
-    path = review.new_review(ctx.repo, args.pry, args.nombre, pedido)
+    path = review.new_review(ctx.repo, args.pry, args.nombre, pedido, args.contacto, args.head or "")
     print(f"creado {path.relative_to(ctx.repo)} (estado: recibido)")
     return 0
 
@@ -2838,6 +3483,8 @@ def _show(ctx: Context, args) -> int:
 
 def _triage(ctx: Context, args) -> int:
     meta, body = review.load(ctx.repo, args.pry)
+    if meta.get("epica"):
+        raise ValueError(f"{args.pry} ya tiene épica ({meta['epica']}): el nivel no se puede cambiar")
     nivel = triage.classify(triage.parse_answers(args.answers))
     meta = state.transition(meta, "triado")
     meta["nivel"] = nivel
@@ -2897,7 +3544,7 @@ def _print_plan(plan: dict) -> None:
 def _jira(ctx: Context, args) -> int:
     meta, body = review.load(ctx.repo, args.pry)
     config = cfg.load_config(ctx.repo, require_jsm=args.apply)
-    plan = build_plan(meta)
+    plan = build_plan(meta, validacion=args.con_validacion)
     _print_plan(plan)
     if args.html:
         Path(args.html).write_text(render_html(plan, meta), encoding="utf-8")
@@ -2906,7 +3553,9 @@ def _jira(ctx: Context, args) -> int:
         print(APPLY_HINT)
         return 0
     client = ctx.client("jira")
-    result = apply_plan(plan, client, config["jira_project"], config["issue_types"])
+    labels = base_labels(meta)
+    known, known_jsm = known_from_journal(read_entries(ctx.repo), labels[0], meta["pry"])
+    result = apply_plan(plan, client, config["jira_project"], config["issue_types"], known=known)
     meta["epica"] = result["epica"]
     review.save(ctx.repo, args.pry, meta, body)
 
@@ -2914,17 +3563,22 @@ def _jira(ctx: Context, args) -> int:
         meta["jsm"] = key
         review.save(ctx.repo, args.pry, meta, body)
 
+    def on_ready() -> None:
+        meta["jsm_listo"] = "si"
+        review.save(ctx.repo, args.pry, meta, body)
+
     description = (f"Pedido {meta['pry']} ({meta.get('nombre', '')}). En este ticket conversamos con Arquitectura "
                    "hasta cerrar la revisión.")
     try:
-        jsm, created = ensure_request(meta, client, config, description, on_created)
+        jsm, created = ensure_request(meta, client, config, description, labels, on_created, on_ready,
+                                      known_jsm=known_jsm)
     except JiraError as exc:
         if meta.get("jsm"):
-            raise JiraError(f"{exc}. El pedido {meta['jsm']} quedó creado pero sin link: correr "
-                            f"arq link {meta['jsm']} {meta['epica']} --apply") from exc
+            raise JiraError(f"{exc}. El pedido {meta['jsm']} quedó creado: volver a correr "
+                            f"`arq jira {args.pry} --apply` para completar labels, participantes y link") from exc
         raise
     print(f"épica: {result['epica']} (creados {len(result['created'])}, existentes {len(result['reused'])})")
-    print(f"jsm: {jsm} ({'creado y linkeado' if created else 'ya existía'})")
+    print(f"jsm: {jsm} ({'creado' if created else 'ya existía'}; labels, participantes y link al día)")
     return 0
 
 
@@ -2932,8 +3586,17 @@ def _jsm(ctx: Context, args) -> int:
     meta, _ = review.load(ctx.repo, args.pry)
     text = Path(args.file).read_text(encoding="utf-8").strip()
     assert_rendered(text)
+    if args.public:
+        if args.template not in PUBLIC_TEMPLATES:
+            raise ValueError(f"una respuesta pública necesita --template ({', '.join(PUBLIC_TEMPLATES)})")
+        if not matches_template(load_template(args.template), text):
+            raise ValueError(f"el texto no sigue la plantilla {args.template}: redactarlo desde ella")
+        needed = PUBLIC_TEMPLATES[args.template]
+        if meta.get("estado") != needed:
+            raise ValueError(f"{args.template} se publica en estado {needed}; el pedido está en {meta.get('estado')}")
     if not meta.get("jsm"):
         raise ValueError(f"{args.pry} no tiene pedido JSM: correr `arq jira {args.pry} --apply` primero")
+    check_key(meta["jsm"])
     kind = "respuesta pública al requirente" if args.public else "nota interna"
     print(f"{kind} en {meta['jsm']}:\n\n{text}\n")
     if not args.apply:
@@ -2944,10 +3607,29 @@ def _jsm(ctx: Context, args) -> int:
     return 0
 
 
+def _seguimiento(ctx: Context, args) -> int:
+    meta, _ = review.load(ctx.repo, args.pry)
+    if meta.get("veredicto") != "aprobar-con-condiciones" or meta.get("estado") not in ("publicado", "cerrado"):
+        raise ValueError("las sub-tasks de seguimiento son para un veredicto aprobar-con-condiciones ya publicado")
+    follow = followup_plan(meta, args.condiciones)
+    print(f"bajo {follow['parent_summary']}:")
+    for sub in follow["subtasks"]:
+        print(f"  sub-task {sub['summary']}")
+    if not args.apply:
+        print(APPLY_HINT)
+        return 0
+    config = cfg.load_config(ctx.repo)
+    label = base_labels(meta)[0]
+    known, _ = known_from_journal(read_entries(ctx.repo), label, meta["pry"])
+    result = apply_followups(follow, label, ctx.client("seguimiento"), config["jira_project"], config["issue_types"],
+                             known=known)
+    print(f"seguimiento: creadas {len(result['created'])}, existentes {len(result['reused'])}")
+    return 0
+
+
 def _link(ctx: Context, args) -> int:
-    for key in (args.inward, args.outward):
-        if not _KEY.fullmatch(key):
-            raise ValueError(f"clave de Jira inválida {key!r}")
+    check_key(args.inward)
+    check_key(args.outward)
     link_type = cfg.load_config(ctx.repo)["link_type"]
     print(f"link {link_type}: {args.inward} → {args.outward}")
     if not args.apply:
@@ -2983,9 +3665,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("pry")
     p.add_argument("--nombre", required=True)
     p.add_argument("--pedido", required=True, help="archivo con el texto del pedido, o - para leer de stdin")
+    p.add_argument("--contacto", required=True, help="email del contacto principal (requirente)")
+    p.add_argument("--head", help="email del head o stakeholder (participante del pedido JSM)")
     p = add("show", _show, "muestra el estado de un pedido")
     p.add_argument("pry")
-    p = add("triage", _triage, "clasifica el pedido en simple o complejo")
+    p = add("triage", _triage, "clasifica el pedido en simple o complejo (se puede repetir hasta crear la épica)")
     p.add_argument("pry")
     p.add_argument("--answers", required=True, help="id=si|no separados por coma (ver contract/triage.md)")
     p = add("set", _set, "actualiza campos del architect o el firmante")
@@ -3003,13 +3687,19 @@ def build_parser() -> argparse.ArgumentParser:
     p = add("jira", _jira, "crea épica, tareas y pedido JSM (dry run salvo --apply)")
     p.add_argument("pry")
     p.add_argument("--html")
+    p.add_argument("--con-validacion", action="store_true", help="incluye la historia opcional de validación técnica")
     p.add_argument("--apply", action="store_true")
     p = add("jsm", _jsm, "comenta en el pedido JSM (dry run salvo --apply)")
     p.add_argument("pry")
     p.add_argument("--file", required=True)
+    p.add_argument("--template", help="plantilla del mensaje público (" + ", ".join(PUBLIC_TEMPLATES) + ")")
     channel = p.add_mutually_exclusive_group(required=True)
     channel.add_argument("--public", action="store_true", help="respuesta al requirente")
     channel.add_argument("--internal", action="store_true", help="nota interna")
+    p.add_argument("--apply", action="store_true")
+    p = add("seguimiento", _seguimiento, "una sub-task por condición de un aprobar-con-condiciones (dry run salvo --apply)")
+    p.add_argument("pry")
+    p.add_argument("condiciones", nargs="+")
     p.add_argument("--apply", action="store_true")
     p = add("link", _link, "linkea dos issues (dry run salvo --apply)")
     p.add_argument("inward")
@@ -3046,7 +3736,7 @@ chmod +x arq.py
 ./arq.py lint
 ./arq.py path
 ```
-Expected: la ayuda lista los 13 subcomandos; `lint` imprime `ok: .../contract/constraints.md`; `path` imprime la
+Expected: la ayuda lista los 14 subcomandos; `lint` imprime `ok: .../contract/constraints.md`; `path` imprime la
 carpeta `contract`.
 
 - [ ] **Step 6: Commit**
@@ -3090,6 +3780,10 @@ def subcommands():
 
 
 class SkillsTest(unittest.TestCase):
+    def test_both_skills_exist(self):
+        found = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
+        self.assertEqual(found, ["arq-architect", "arq-manager"])
+
     def test_frontmatter(self):
         for name in ("arq-manager", "arq-architect"):
             text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
@@ -3134,76 +3828,90 @@ juicio técnico**: eso es de `arq-architect`. Todo pasa por el CLI `arq`, parado
 
 ## Antes de empezar
 
-1. Si no existe `.arq/config.json`, correr `arq init` y pedirle al usuario `jira_project`, `jsm_service_desk_id` y
-   `jsm_request_type_id` para completarlo.
-2. `arq show PRY-AAAA-NNNN` y actuar según el estado:
+1. Si no existe `.arq/config.json`, correr `arq init` y pedirle al usuario `jsm_project`, `jsm_service_desk_id` y
+   `jsm_request_type_id` (y `jira_project` si no es `ARQ`) para completarlo.
+2. `arq show PRY-AAAA-NNNN` y actuar en este orden:
 
-| Estado | Qué hace el manager |
+| Condición | Qué hace el manager |
 |---|---|
-| (no existe) | Paso 1: registrar |
-| `recibido` | Paso 2: triage |
-| `triado` sin `epica` | Paso 3: Jira y JSM |
-| `triado`, `esperando-info`, `en-analisis` | Le toca a `arq-architect`. Controlar el plazo (paso 4) y publicar en JSM lo que el architect deje redactado |
+| El review no existe | Paso 1: registrar |
+| `estado: recibido` | Paso 2: triage |
+| `epica` vacía (en cualquier estado) | Paso 3: Jira y JSM |
+| `jsm_listo` vacío | Paso 3 otra vez: el mismo comando completa lo que falta |
+| `triado`, `esperando-info`, `en-analisis` | Le toca a `arq-architect`. Controlar el plazo (paso 4) y publicar el pedido de información que deje redactado |
 | `en-firma` | Paso 5: firma |
-| `publicado` | Paso 6: cierre |
+| `publicado` | Paso 6: devolución y cierre |
 | `propuesta-rechazo` | Paso 7 |
 
 ## 1. Registrar
 
-Transcribir el pedido **textual** (de texto pegado o screenshot) a un archivo en el scratchpad, sin resumir ni corregir:
-es evidencia. Luego `arq new PRY-AAAA-NNNN --nombre "<nombre>" --pedido <archivo>`.
+Transcribir el pedido **textual** (de texto pegado o screenshot de la plataforma) a un archivo en el scratchpad, sin
+resumir ni corregir: es evidencia. El "Contacto principal" es el requirente y el "Head / Stakeholder" es el head:
+
+`arq new PRY-AAAA-NNNN --nombre "<nombre>" --pedido <archivo> --contacto <email del contacto> --head <email del head>`
 
 ## 2. Triage
 
 Leer `triage.md` en la carpeta que imprime `arq path`. Para cada pregunta, proponer sí o no citando la frase del
 pedido que lo justifica, y **pedirle confirmación al usuario**: contesta la persona que coordina, no el modelo. Ante la
-duda, "sí". Con las respuestas confirmadas: `arq triage PRY-AAAA-NNNN --answers "<id>=si|no,..."`.
+duda, "sí". Con las respuestas confirmadas: `arq triage PRY-AAAA-NNNN --answers "<id>=si|no,..."`. Si hubo un error,
+se puede repetir mientras no exista la épica.
 
 ## 3. Jira y JSM
 
-1. `arq jira PRY-AAAA-NNNN --html <scratchpad>/PRY-AAAA-NNNN.html`: mostrar el árbol y abrir el HTML.
+1. `arq jira PRY-AAAA-NNNN --html <scratchpad>/PRY-AAAA-NNNN.html`: mostrar el árbol y abrir el HTML. En nivel
+   `complejo`, preguntar si hace falta la historia opcional de validación técnica (`--con-validacion`).
 2. Esperar un sí explícito.
-3. Darle al usuario el comando para que lo corra él: `! arq jira PRY-AAAA-NNNN --apply`. **Nunca correr `--apply`.**
-4. Si falla a mitad de camino, el mismo comando reanuda sin duplicar. Si el error dice que falta un link, darle el
-   `! arq link <JSM> <EPICA> --apply` que imprime.
+3. Darle al usuario el comando para que lo corra él: `! arq jira PRY-AAAA-NNNN --apply` (con `--con-validacion` si
+   corresponde). **Nunca correr `--apply`.**
+4. El pedido JSM se crea a nombre del contacto, que se busca en Jira por email, y el head queda como participante. Si
+   el CLI dice que no encontró a alguien, hay que darlo de alta como cliente del Service Desk y repetir el mismo
+   comando.
+5. Ante cualquier falla, el mismo `! arq jira PRY-AAAA-NNNN --apply` reanuda sin duplicar.
 
-## 4. Plazo
+## 4. Plazo y pedido de información
 
 `arq timebox PRY-AAAA-NNNN` fija el vencimiento la primera vez y después lo consulta. Si dice `vencido` estando en
 `esperando-info`, ir al paso 7.
 
-Cuando el architect deja `reviews/PRY-AAAA-NNNN.jsm.md`, publicarlo: `arq jsm PRY-AAAA-NNNN --file
-reviews/PRY-AAAA-NNNN.jsm.md --public` (dry run, mostrar el texto), y con el ok darle al usuario
-`! arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --apply`. El debate técnico va con `--internal`,
-nunca con `--public`.
+Cuando el architect deja `reviews/PRY-AAAA-NNNN.jsm.md` con el estado en `esperando-info`, mostrarlo en dry run con
+`arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --template jsm-pedido-info.md` y, con el ok, darle
+al usuario `! arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --template jsm-pedido-info.md --apply`.
+El debate técnico va con `--internal`, nunca con `--public`.
 
 ## 5. Firma
 
 Firma una persona según el nivel: `simple` → alguien del track técnico; `complejo` → el Sr Expert. Es política
 interna: no se escribe en los tickets. Quien firma revisa `reviews/PRY-AAAA-NNNN.md` y, si está de acuerdo,
-`arq set PRY-AAAA-NNNN firmante=<usuario>`.
+`arq set PRY-AAAA-NNNN firmante=<usuario>`. Después: `arq state PRY-AAAA-NNNN --to publicado` (el CLI exige firmante).
 
-## 6. Publicar y cerrar
+## 6. Devolución y cierre
 
-1. Publicar `reviews/PRY-AAAA-NNNN.jsm.md` en JSM como en el paso 4.
-2. `arq state PRY-AAAA-NNNN --to publicado`.
+1. Con el estado en `publicado`, publicar la devolución:
+   `arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --template jsm-devolucion.md` (dry run) y
+   `! arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --template jsm-devolucion.md --apply`.
+2. Si el veredicto es `aprobar-con-condiciones`, una sub-task por condición de la sección "Condiciones" del review:
+   `arq seguimiento PRY-AAAA-NNNN "<condición 1>" "<condición 2>"` (dry run) y
+   `! arq seguimiento PRY-AAAA-NNNN "<condición 1>" "<condición 2>" --apply`.
 3. Mostrarle al usuario `reviews/PRY-AAAA-NNNN.comentario.md` para pegar en la plataforma PRY. **El click en Aprobar o
    Rechazar lo hace una persona; el agente nunca.** "Aprobar con condiciones" se publica como Aprobar.
 4. Leer `templates/escalar-rfc.md`. Si aplica, sugerir la skill `product-brain` para el RFC y linkear la épica de
-   delivery con `arq link`.
-5. Cuando la persona confirma el click: `arq state PRY-AAAA-NNNN --to cerrado --resultado aprobado|condicionado|rechazado`.
+   delivery: `arq link <EPICA-ARQ> <EPICA-DELIVERY>` (dry run) y `! arq link <EPICA-ARQ> <EPICA-DELIVERY> --apply`.
+5. Cuando la persona confirma el click: `arq state PRY-AAAA-NNNN --to cerrado --resultado <resultado>`; el resultado
+   tiene que corresponder al veredicto (`aprobar` → `aprobado`, `aprobar-con-condiciones` → `condicionado`,
+   `rechazar` → `rechazado`).
 
 ## 7. Plazo vencido
 
-`arq state PRY-AAAA-NNNN --to propuesta-rechazo`. Redactar en `reviews/PRY-AAAA-NNNN.jsm.md` un cierre cordial: no
-llegó la información, se cierra como incompleto y se puede volver a cargar. Publicarlo como en el paso 4. La persona
-rechaza en la plataforma con el motivo y el link al JSM, y se cierra con `--resultado rechazado`.
+`arq state PRY-AAAA-NNNN --to propuesta-rechazo`. Redactar `reviews/PRY-AAAA-NNNN.jsm.md` desde
+`templates/jsm-cierre.md` y publicarlo con `--template jsm-cierre.md` como en el paso 4. La persona rechaza en la
+plataforma con el motivo y el link al JSM, y se cierra con `arq state PRY-AAAA-NNNN --to cerrado --resultado rechazado`.
 
 ## Reglas
 
 - Nunca juicio técnico, ni siquiera "parece razonable".
 - Nunca `--apply` por cuenta propia: siempre se lo da al usuario con `!`.
-- Lo público sale de las plantillas del contrato, en tono profesional y con recomendaciones.
+- Lo público sale de las plantillas `jsm-*.md` del contrato; el CLI rechaza lo que no las sigue.
 - Labels y tareas hablan del trabajo, nunca de la seniority de las personas.
 ````
 
@@ -3238,8 +3946,9 @@ test: cada afirmación tiene que apuntar a un número, componente, diagrama o m�
 - **Falta input** → `arq state PRY-AAAA-NNNN --to esperando-info`. Escribir en el review las secciones "Lo que
   entendimos", "Input faltante" y "Análisis preliminar (sin veredicto)" con los pasos 2, 3 y 7 del método, y fijar
   `arq set PRY-AAAA-NNNN componente_debil=<c> senales=<s>`. Redactar `reviews/PRY-AAAA-NNNN.jsm.md` desde
-  `templates/jsm-pedido-info.md`: por cada faltante, una pregunta **concreta para este pedido** (nunca genérica) y por
-  qué se pide. Avisar que le toca a `arq-manager` publicarlo.
+  `templates/jsm-pedido-info.md`, completando solo los placeholders y sin tocar el texto fijo (el CLI rechaza lo que
+  no sigue la plantilla): por cada faltante, una pregunta **concreta para este pedido** (nunca genérica) y por qué se
+  pide. Avisar que le toca a `arq-manager` publicarlo.
 - **Input completo** → `arq state PRY-AAAA-NNNN --to en-analisis` y seguir.
 
 ## 2. Método
@@ -3265,12 +3974,14 @@ test: cada afirmación tiene que apuntar a un número, componente, diagrama o m�
 
 ## 3. Escribir
 
-1. Completar en el review las secciones de `templates/analisis.md`, debajo de "Pedido original".
+1. Completar en el review las secciones de `templates/analisis.md`, debajo de "Pedido original". En "Condiciones",
+   una condición verificable por bullet: `arq-manager` crea una sub-task de seguimiento por cada una.
 2. `arq set PRY-AAAA-NNNN componente_debil=<c> senales=<s> veredicto=<v>`. El CLI rechaza un veredicto con input
    faltante.
 3. Redactar `reviews/PRY-AAAA-NNNN.jsm.md` desde `templates/jsm-devolucion.md` y `reviews/PRY-AAAA-NNNN.comentario.md`
-   desde `templates/comentario-pry.md`, sin placeholders.
-4. `arq state PRY-AAAA-NNNN --to en-firma` y decir quién firma: nivel `simple` → track técnico; `complejo` → Sr Expert.
+   desde `templates/comentario-pry.md`, completando solo los placeholders y sin tocar el texto fijo.
+4. `arq state PRY-AAAA-NNNN --to en-firma` (el CLI exige veredicto y nada faltante) y decir quién firma: nivel
+   `simple` → track técnico; `complejo` → Sr Expert.
 
 ## Reglas
 
@@ -3289,13 +4000,14 @@ test: cada afirmación tiene que apuntar a un número, componente, diagrama o m�
 # Install arq-review for Claude Code, Codex and Cursor.
 #   ./install.sh
 # Skills: ~/.agents/skills/<skill> points at this repo's skills/<skill>; ~/.claude/skills and ~/.codex/skills point
-# at ../../.agents/skills/<skill>. CLI: ~/.local/bin/arq points at arq.py. Re-running is safe. A real file or
-# directory with the same name is never replaced: the script stops with exit 1.
+# at ../../.agents/skills/<skill>; Cursor reads ~/.agents/skills natively (same layout as WayOfWork and jira-kanban).
+# CLI: ~/.local/bin/arq points at arq.py. Re-running is safe. A real file or directory with the same name is never
+# replaced: the script stops with exit 1.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${1:-}" in
-  -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
   "") ;;
   *) echo "unknown argument: $1" >&2; exit 2 ;;
 esac
@@ -3349,16 +4061,20 @@ export JIRA_BASE_URL=https://<sitio>.atlassian.net JIRA_EMAIL=<mail> JIRA_API_TO
 
 ```bash
 arq init                                             # .arq/config.json y reviews/
-arq new PRY-2026-0028 --nombre "PoC modelos IA Locales" --pedido pedido.txt
+arq new PRY-2026-0028 --nombre "PoC modelos IA Locales" --pedido pedido.txt \
+  --contacto requester@example.com --head reviewer@example.com
 arq triage PRY-2026-0028 --answers "multi_cuenta=no,..."
 arq jira PRY-2026-0028 --html vista.html             # dry run
 arq jira PRY-2026-0028 --apply                       # lo corre una persona
 arq timebox PRY-2026-0028
+arq jsm PRY-2026-0028 --file reviews/PRY-2026-0028.jsm.md --public --template jsm-pedido-info.md
 arq show PRY-2026-0028
 ```
 
-Ninguna escritura en Jira/JSM ocurre sin `--apply`, y todas quedan en `.arq/jira-writes.jsonl`. Nada aprueba ni
-rechaza en la plataforma PRY: eso lo hace una persona.
+Ninguna escritura en Jira/JSM ocurre sin `--apply`, y todas quedan en `.arq/jira-writes.jsonl`. El pedido JSM se crea
+a nombre del contacto (buscado en Jira por email) con el head como participante. Las respuestas públicas tienen que
+seguir una plantilla `jsm-*.md` y respetar el estado del pedido. Nada aprueba ni rechaza en la plataforma PRY: eso lo
+hace una persona.
 
 ## Tests
 
