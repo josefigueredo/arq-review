@@ -1,0 +1,9 @@
+{
+  "nivel": "complejo",
+  "estado": "esperando-info",
+  "debe_pedir": ["diagrama_c4", "flujos_datos", "rollback", "dependencias"],
+  "debe_citar": ["C-PLAT-01"],
+  "componente_debil": "datos",
+  "senales": ["seguridad", "cloud"],
+  "sin_veredicto": true
+}

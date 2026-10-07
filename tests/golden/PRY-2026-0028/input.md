@@ -1,0 +1,15 @@
+- Tipo: Interno Plataforma
+- Nombre: PoC modelos IA Locales
+- Descripción: Habilitar una instancia G6e.xlarge L40S de 44 GiB de VRAM
+- Empresa / área: CROSS
+- Tipo de trabajo: Optimización de costos (FinOps)
+- Fecha deseada: 2026-10-13 (Sí, es negociable)
+- Justificación fecha: No hay urgencia, es mejora deseable
+- Impacto: Únicamente se aplazan los tiempos de prueba, pero no pone en criticidad ningún proyecto
+- Equipos involucrados: No, solo Plataforma
+- Documentación: Google Doc (link)
+- ¿Quién valida?: El head del área
+- Entregable esperado: Un business case donde valide la hipótesis de valor: con modelos locales se logre reducir el costo de procesamiento frente a modelos SaaS
+- Requisitos al cierre: Requiere documentación
+- Problema / mejora: El incremento de costos en modelos SaaS, especialmente Cursor y GitHub Copilot, en la adopción de IA para los flujos de trabajo; se espera que el costo de máquinas virtuales reduzca el costo pagado por software as a service
+- Es cross: Sí — SaaS

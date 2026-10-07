@@ -1,0 +1,9 @@
+{
+  "nivel": "simple",
+  "estado": "esperando-info",
+  "debe_pedir": ["hipotesis_medible", "duracion_y_baja", "costo_estimado", "via_aprovisionamiento"],
+  "debe_citar": ["C-PLAT-01"],
+  "componente_debil": "costo",
+  "senales": ["finops"],
+  "sin_veredicto": true
+}

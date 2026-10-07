@@ -1,0 +1,14 @@
+- Tipo: Empresas/Vertical del grupo
+- Nombre: Product Brain
+- Descripción: Migrar instancias de PB de las cuentas de uMarket a ACME Cross Domain + Habilitación de Bedrock en cuenta ACME Cross Domain
+- Empresa / área: PDLC Tools
+- Tipo de trabajo: Migración
+- Fecha deseada: 2026-10-15 (No, es comprometida)
+- Justificación fecha: Dependencia con otro proyecto
+- Impacto: Demoras en la implementación del nuevo PDLC federado
+- Equipos involucrados: Sí — Base de datos. En caso de demorar en la fecha, propongo migrar instancias apuntando al servicio de uMarket si es posible
+- Documentación: diagrama .drawio en GitHub (acme-agent/docs/diagrams/all-diagrams.drawio)
+- ¿Quién valida?: Líder del Squad
+- Entregable esperado: Product Brain migrado a la cuenta destino + habilitación de Bedrock a nivel AWS
+- Requisitos al cierre: No requiere nada adicional
+- Comentario previo de Arquitectura: se generó una primera versión para la Hackathon y no hubo evaluación formal de ARQ
