@@ -42,6 +42,8 @@ set -a && source <ruta>/.env && set +a && arq jira PRY-2026-0028 --apply
     ├── PRY-2026-0028.md        # frontmatter de estado + análisis
     ├── PRY-2026-0028.jsm.md    # mensaje al requirente (lo redacta arq-architect)
     └── PRY-2026-0028.comentario.md  # comentario corto para la plataforma PRY
+iniciativas/
+└── PRY-2026-0028/              # submódulo git con remote propio: material que se comparte con el equipo del pedido
 ```
 
 `.arq/config.json`, tal como se usa en ACME (canal `software`: el requirente conversa en un proyecto de Software usado

@@ -80,3 +80,7 @@ test: cada afirmación tiene que apuntar a un número, componente, diagrama o m�
 - Para tunear: `arq eval tests/golden/<PRY> reviews/<PRY>.md` contra los golden cases del repo `arq-review`. Cada
   revisión real que salga mal se convierte en un golden case nuevo. Un golden se corrige solo si cambia la evidencia,
   nunca para que pase la salida.
+- Evidencia comparable: para comparar modelos, usar benchmarks con el mismo harness (por ejemplo SWE-rebench), nunca
+  los números que publica cada proveedor. Si hay uso real medido, preferirlo a los supuestos y decir de dónde sale.
+- Material que se comparte con el equipo del pedido (calculadoras, anexos) va en `iniciativas/PRY-AAAA-NNNN/` del
+  repo de reviews, que es un submódulo git con su propio remote. El review sigue en `reviews/` y lo cita por su ruta.

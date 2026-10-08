@@ -298,3 +298,9 @@ tiene acceso. Devuelve el mismo pedido normalizado que el intake manual. Sin end
   `arq ver`.
 - **Documentación compartible.** Las guías y presentaciones viven como archivos locales (Markdown fuente + HTML
   autocontenido), no como artefactos de claude.ai, porque esos no se pueden compartir con el equipo.
+- **Iniciativas como submódulos.** El material que se comparte con el equipo de un pedido (en PRY-2026-0028, una
+  calculadora autocontenida) vive en `iniciativas/PRY-AAAA-NNNN/` del repo de reviews, como submódulo con su propio
+  remote (`PRY-AAAA-NNNN`). Así el equipo del pedido tiene acceso sin ver las demás revisiones.
+- **Evidencia antes que supuestos (PRY-2026-0028).** Los scores de los proveedores no son comparables: Qwen3.6-27B se
+  anuncia con 77,2 % en SWE-bench Verified y saca 31,2 % en SWE-rebench. Un supuesto de contexto (48k tokens) quedó
+  siete veces corto frente al uso medido (p50 341k). Medir primero y modelar el uso por perfiles, no un promedio.
