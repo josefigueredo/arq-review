@@ -10,6 +10,7 @@ from typing import Callable, List, Mapping, Optional
 
 from arqlib import config as cfg
 from arqlib import fields, review, state, triage
+from arqlib.board import render_board
 from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal
 from arqlib.constraints import lint
 from arqlib.evaluate import evaluate_files
@@ -18,7 +19,7 @@ from arqlib.journal import journal, read_entries
 from arqlib.paths import CONTRACT
 from arqlib.preview import render_html
 from arqlib.render import assert_rendered, load_template, matches_template
-from arqlib.structure import base_labels, build_plan, followup_plan
+from arqlib.structure import base_labels, build_plan, followup_plan, pry_label
 from arqlib.timebox import add_business_days, is_overdue
 
 APPLY_HINT = ("dry run: no se escribió nada. Para ejecutarlo, el usuario corre el mismo comando con --apply "
@@ -227,6 +228,16 @@ def _seguimiento(ctx: Context, args) -> int:
     return 0
 
 
+def _ver(ctx: Context, args) -> int:
+    meta, _ = review.load(ctx.repo, args.pry)
+    if not meta.get("epica"):
+        raise ValueError(f"{args.pry} todavía no tiene épica: correr `arq jira {args.pry} --apply` primero")
+    client = ctx.client("ver")
+    links = not args.sin_links and sys.stdout.isatty()
+    print(render_board(meta, client.search_board(pry_label(meta["pry"])), client.browse_url, links=links))
+    return 0
+
+
 def _link(ctx: Context, args) -> int:
     check_key(args.inward)
     check_key(args.outward)
@@ -301,6 +312,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("pry")
     p.add_argument("condiciones", nargs="+")
     p.add_argument("--apply", action="store_true")
+    p = add("ver", _ver, "muestra el ticket del requirente y el árbol de la épica con su estado (solo lectura)")
+    p.add_argument("pry")
+    p.add_argument("--sin-links", action="store_true", help="sin links clickeables en la terminal")
     p = add("link", _link, "linkea dos issues (dry run salvo --apply)")
     p.add_argument("inward")
     p.add_argument("outward")

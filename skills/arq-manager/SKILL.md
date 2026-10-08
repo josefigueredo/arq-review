@@ -30,6 +30,13 @@ Los comandos con `--apply` necesitan `JIRA_BASE_URL`, `JIRA_EMAIL` y `JIRA_API_T
 | `publicado` | Paso 6: devolución y cierre |
 | `propuesta-rechazo` | Paso 7 |
 
+## Ver cómo va un pedido
+
+`arq ver PRY-AAAA-NNNN` muestra, en solo lectura, el ticket del requirente y el árbol de la épica con el estado, el
+responsable y el avance de cada issue. No escribe nada, así que no lleva `--apply`, pero necesita las credenciales en
+el entorno. En una terminal, las claves son links clickeables (OSC 8); para que el usuario los tenga, darle el comando
+para que lo corra en su propia terminal. `--sin-links` los apaga.
+
 ## 1. Registrar
 
 Transcribir el pedido **textual** (de texto pegado o screenshot de la plataforma) a un archivo en el scratchpad, sin

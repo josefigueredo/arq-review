@@ -143,6 +143,24 @@ class JiraTest(unittest.TestCase):
         missing = urllib.error.HTTPError("u", 404, "Not Found", {}, io.BytesIO(b"{}"))
         self.assertIsNone(client(FakeOpener(missing)).get_property("PLATE-614", "arq.node"))
 
+    def test_search_board_reads_status_and_assignee(self):
+        opener = FakeOpener({"issues": [
+            {"key": "PLATE-616", "fields": {"summary": "Normalizar pedido", "issuetype": {"name": "Subtarea"},
+                                            "status": {"name": "Done", "statusCategory": {"key": "done"}},
+                                            "parent": {"key": "PLATE-615"},
+                                            "assignee": {"displayName": "Jose Figueredo"}}},
+            {"key": "PLATE-614", "fields": {"summary": "E", "issuetype": {"name": "Epic"},
+                                            "status": {"name": "Backlog", "statusCategory": {"key": "new"}},
+                                            "parent": None, "assignee": None}}]})
+        jira = client(opener)
+        board = jira.search_board("pry:2026-0028")
+        self.assertEqual(board[0], {"key": "PLATE-616", "summary": "Normalizar pedido", "type": "Subtarea",
+                                    "status": "Done", "category": "done", "parent": "PLATE-615",
+                                    "assignee": "Jose Figueredo"})
+        self.assertEqual((board[1]["category"], board[1]["assignee"]), ("todo", None))
+        self.assertEqual(opener.calls[0][2]["fields"], ["summary", "issuetype", "status", "parent", "assignee"])
+        self.assertEqual(jira.browse_url("PLATE-614"), "https://x.atlassian.net/browse/PLATE-614")
+
     def test_get_brief(self):
         opener = FakeOpener({"key": "ARQ-2", "fields": {"summary": "s", "parent": {"key": "ARQ-1"}}})
         self.assertEqual(client(opener).get_brief("ARQ-2"), {"key": "ARQ-2", "summary": "s", "parent": "ARQ-1"})

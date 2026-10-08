@@ -60,6 +60,14 @@ class FakeJira:
                             "type": fields["issuetype"]["name"], "parent": (fields.get("parent") or {}).get("key")}
         return key
 
+    def browse_url(self, key: str) -> str:
+        return f"https://example.atlassian.net/browse/{key}"
+
+    def search_board(self, label: str) -> List[dict]:
+        return [{"key": k, "summary": i["summary"], "type": i["type"], "status": i.get("status", "Backlog"),
+                 "category": i.get("category", "todo"), "parent": i["parent"], "assignee": i.get("assignee")}
+                for k, i in self.issues.items() if label in i["labels"] and k not in self.hidden]
+
     def rename(self, key: str, summary: str) -> None:
         """What a person does by hand in Jira."""
         self.issues[key]["summary"] = summary

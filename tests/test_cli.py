@@ -216,6 +216,21 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("ya se publicó", err)
 
+    def test_ver_shows_ticket_and_epic_tree_without_links_off_tty(self):
+        repo, fake = ready_repo(), helpers.FakeJira()
+        run(repo, "triage", PRY, "--answers", ALL_NO)
+        code, _, err = run(repo, "ver", PRY, fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn("arq jira", err)
+        run(repo, "jira", PRY, "--apply", fake=fake)
+        code, out, _ = run(repo, "ver", PRY, fake=fake)
+        self.assertEqual(code, 0)
+        self.assertIn("JSM-1", out)
+        self.assertIn("ARQ-1", out)
+        self.assertIn("└─ ○", out)
+        self.assertIn("Avance de la épica: 0 de 7 hechas", out)  # simple: épica + task + 5 sub-tasks
+        self.assertNotIn("\x1b]8", out)
+
     def test_bad_pry_never_touches_disk(self):
         repo = helpers.make_repo()
         run(repo, "init")

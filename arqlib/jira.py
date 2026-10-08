@@ -11,6 +11,7 @@ from typing import Callable, Dict, List, Optional
 
 _LABEL = re.compile(r"[\w:.-]+")
 _KEY = re.compile(r"[A-Z][A-Z0-9]+-\d+")
+CATEGORY = {"new": "todo", "indeterminate": "in_progress", "done": "done"}  # Jira's fixed status categories
 
 
 class JiraError(RuntimeError):
@@ -59,6 +60,31 @@ class Jira:
                 fields = issue.get("fields") or {}
                 found.append({"key": issue["key"], "summary": fields.get("summary"),
                               "parent": (fields.get("parent") or {}).get("key")})
+            token = page.get("nextPageToken")
+            if not token:
+                return found
+            body = dict(body, nextPageToken=token)
+
+    def browse_url(self, key: str) -> str:
+        return f"{self.base}/browse/{key}"
+
+    def search_board(self, label: str) -> List[Dict[str, Optional[str]]]:
+        """Every issue with the label, with what a person needs to see its progress. Read only."""
+        if not _LABEL.fullmatch(label):
+            raise JiraError(f"label inválido {label!r}")
+        body: dict = {"jql": f'labels = "{label}" ORDER BY key', "maxResults": 100,
+                      "fields": ["summary", "issuetype", "status", "parent", "assignee"]}
+        found: List[Dict[str, Optional[str]]] = []
+        while True:
+            page = self._send("POST", "/rest/api/3/search/jql", body)
+            for issue in page.get("issues", []):
+                fields = issue.get("fields") or {}
+                status = fields.get("status") or {}
+                found.append({"key": issue["key"], "summary": fields.get("summary"),
+                              "type": (fields.get("issuetype") or {}).get("name"), "status": status.get("name"),
+                              "category": CATEGORY.get((status.get("statusCategory") or {}).get("key"), "todo"),
+                              "parent": (fields.get("parent") or {}).get("key"),
+                              "assignee": (fields.get("assignee") or {}).get("displayName")})
             token = page.get("nextPageToken")
             if not token:
                 return found

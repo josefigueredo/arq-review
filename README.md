@@ -61,7 +61,8 @@ Con `"canal_requirente": "jsm"` se usan en cambio `jsm_project`, `jsm_service_de
 | `arq init` | crea `.arq/config.json` y `reviews/` |
 | `arq path` · `arq lint` | carpeta del contrato · valida `constraints.md` |
 | `arq new PRY --nombre N --pedido F --contacto EMAIL [--head EMAIL]` | registra un pedido (`recibido`) |
-| `arq show PRY` | muestra el estado |
+| `arq show PRY` | muestra el estado del review (local) |
+| `arq ver PRY [--sin-links]` | solo lectura en Jira: ticket del requirente y árbol de la épica con el estado, el responsable y el avance de cada issue; las claves son links clickeables en la terminal (OSC 8) |
 | `arq triage PRY --answers "id=si,..."` | nivel `simple`/`complejo`; se puede repetir hasta crear la épica |
 | `arq jira PRY [--html F] [--con-validacion] [--apply]` | épica, historias y sub-tasks + ticket del requirente, linkeados |
 | `arq timebox PRY [--today AAAA-MM-DD]` | arranca o consulta el plazo |
