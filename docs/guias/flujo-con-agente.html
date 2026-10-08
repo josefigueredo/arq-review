@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revisión de Arquitectura · Flujo con agente</title>
+<style>
+:root {
+--bg: #f6f7f9; --surface: #ffffff; --text: #1d2330; --muted: #5c6577; --line: #d9dee7;
+--accent: #2f6fde; --accent-soft: #e6eefc; --ok: #1f8a5b; --warn: #b7791f; --warn-soft: #fbf3e4;
+--code-bg: #eef1f6; --shadow: 0 6px 24px rgba(20, 30, 60, .08);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) {
+--bg: #12151b; --surface: #1a1f28; --text: #e7eaf0; --muted: #9aa3b5; --line: #2c3442;
+--accent: #6aa0ff; --accent-soft: #1f2d48; --ok: #4cc38a; --warn: #e3a63c; --warn-soft: #2d2618;
+--code-bg: #232a36; --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+}
+}
+:root[data-theme="dark"] {
+--bg: #12151b; --surface: #1a1f28; --text: #e7eaf0; --muted: #9aa3b5; --line: #2c3442;
+--accent: #6aa0ff; --accent-soft: #1f2d48; --ok: #4cc38a; --warn: #e3a63c; --warn-soft: #2d2618;
+--code-bg: #232a36; --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body {
+margin: 0; background: var(--bg); color: var(--text);
+font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+-webkit-font-smoothing: antialiased;
+}
+.hero { background: linear-gradient(135deg, #2f6fde, #6b4fbb); color: #fff; padding: 48px 16px 40px; }
+.hero-inner { max-width: 1180px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 12px; font-weight: 600; opacity: .85; margin: 0 0 8px; }
+.hero h1 { margin: 0; font-size: clamp(28px, 4vw, 42px); line-height: 1.15; letter-spacing: -.01em; }
+.theme-toggle {
+flex: none; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.12); color: #fff;
+border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.layout { max-width: 1180px; margin: 0 auto; padding: 0 16px 64px; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 32px; }
+nav#toc {
+position: sticky; top: 16px; align-self: start; margin-top: -24px; max-height: calc(100vh - 32px); overflow: auto;
+background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px; box-shadow: var(--shadow);
+}
+nav#toc::before { content: "Contenido"; display: block; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+nav#toc ul { list-style: none; margin: 0; padding: 0; }
+nav#toc ul ul { padding-left: 12px; border-left: 2px solid var(--line); margin: 4px 0 8px 4px; }
+nav#toc a { overflow-wrap: anywhere; display: block; padding: 3px 6px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 14px; line-height: 1.35; }
+nav#toc ul ul a { color: var(--muted); font-size: 13px; }
+nav#toc a:hover, nav#toc a.active { background: var(--accent-soft); color: var(--accent); }
+main {
+margin-top: -24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+padding: 36px clamp(18px, 4vw, 48px); box-shadow: var(--shadow); min-width: 0;
+}
+main > p:first-child { font-size: 18px; color: var(--muted); margin-top: 0; }
+h2 { font-size: 26px; margin: 48px 0 16px; padding-top: 24px; border-top: 1px solid var(--line); letter-spacing: -.01em; }
+main > h2:first-of-type { border-top: 0; padding-top: 0; margin-top: 28px; }
+h3 {
+font-size: 19px; margin: 32px 0 12px; padding: 10px 14px; background: var(--accent-soft); color: var(--accent);
+border-radius: 10px; border-left: 4px solid var(--accent);
+}
+a { color: var(--accent); }
+strong { font-weight: 650; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px; font: 0.88em/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 10px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+.table-wrap { overflow-x: auto; margin: 16px 0 20px; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { background: var(--bg); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--bg); }
+blockquote {
+margin: 20px 0; padding: 14px 18px; background: var(--warn-soft); border-left: 4px solid var(--warn);
+border-radius: 0 10px 10px 0;
+}
+blockquote p { margin: 6px 0; }
+ul, ol { padding-left: 24px; }
+li { margin: 4px 0; }
+li > ul, li > ol { margin: 4px 0; }
+ul.task-list, ul:has(> li > input[type=checkbox]) { list-style: none; padding-left: 4px; }
+li:has(> input[type=checkbox]) { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; }
+li:has(> input[type=checkbox]:checked) { color: var(--muted); text-decoration: line-through; }
+input[type=checkbox] { width: 18px; height: 18px; margin-top: 4px; accent-color: var(--ok); flex: none; cursor: pointer; }
+figure, p:has(> img) { margin: 20px 0; text-align: center; }
+img { max-height: 900px; max-width: 100%; height: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+figcaption { display: none; }
+main img { cursor: zoom-in; transition: box-shadow .15s; }
+main img:hover { box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+.zoom-hint { display: block; margin-top: 6px; font-size: 13px; color: var(--muted); }
+dialog.lightbox {
+width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0;
+background: rgba(10, 14, 22, .96); overflow: auto;
+}
+dialog.lightbox::backdrop { background: transparent; }
+dialog.lightbox .stage { min-width: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 56px 16px 24px; }
+dialog.lightbox img {
+flex: none; max-width: none; max-height: none; width: auto; height: auto; cursor: zoom-out;
+border: 0; border-radius: 12px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+dialog.lightbox img.fit { width: auto; max-width: calc(100vw - 32px); max-height: calc(100vh - 80px); }
+dialog.lightbox .bar { position: fixed; top: 12px; right: 12px; display: flex; gap: 8px; z-index: 1; }
+dialog.lightbox button {
+font: inherit; font-size: 14px; color: #fff; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3);
+border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.checklist-tools { font-size: 13px; color: var(--muted); }
+.checklist-tools button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 40px; color: var(--muted); font-size: 13px; }
+@media (max-width: 900px) {
+.layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+nav#toc { position: static; max-height: none; margin-top: -24px; }
+main { margin-top: 0; }
+}
+@media print {
+.hero { background: none; color: var(--text); padding: 0 0 16px; }
+.theme-toggle, nav#toc, .checklist-tools { display: none; }
+.layout { display: block; padding: 0; }
+main { border: 0; box-shadow: none; padding: 0; margin: 0; }
+h2, h3 { break-after: avoid; }
+tr, li { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow">Revisión de Arquitectura · Guía para personas nuevas en el proceso</p>
+      <h1>Revisión de Arquitectura · Flujo con agente</h1>
+    </div>
+    <button class="theme-toggle" type="button" aria-label="Cambiar tema claro u oscuro">◐ Tema</button>
+  </div>
+</header>
+<div class="layout">
+<nav id="toc" aria-label="Contenido">
+<ul>
+<li><a href="#1-qué-cambia-y-qué-no" id="toc-1-qué-cambia-y-qué-no">1.
+Qué cambia y qué no</a></li>
+<li><a href="#2-las-piezas" id="toc-2-las-piezas">2. Las piezas</a></li>
+<li><a href="#3-antes-de-empezar" id="toc-3-antes-de-empezar">3. Antes
+de empezar</a></li>
+<li><a href="#4-paso-a-paso-con-el-agente" id="toc-4-paso-a-paso-con-el-agente">4. Paso a paso con el agente</a>
+<ul>
+<li><a href="#paso-1--registrar-arq-manager" id="toc-paso-1--registrar-arq-manager">Paso 1 · Registrar
+(arq-manager)</a></li>
+<li><a href="#paso-2--clasificar-arq-manager" id="toc-paso-2--clasificar-arq-manager">Paso 2 · Clasificar
+(arq-manager)</a></li>
+<li><a href="#paso-3--abrir-los-tickets-y-el-plazo-arq-manager" id="toc-paso-3--abrir-los-tickets-y-el-plazo-arq-manager">Paso 3 · Abrir
+los tickets y el plazo (arq-manager)</a></li>
+<li><a href="#paso-4--revisar-la-información-mínima-arq-architect" id="toc-paso-4--revisar-la-información-mínima-arq-architect">Paso 4 ·
+Revisar la información mínima (arq-architect)</a></li>
+<li><a href="#paso-5--publicar-el-pedido-de-información-arq-manager" id="toc-paso-5--publicar-el-pedido-de-información-arq-manager">Paso 5 ·
+Publicar el pedido de información (arq-manager)</a></li>
+<li><a href="#paso-6--analizar-arq-architect" id="toc-paso-6--analizar-arq-architect">Paso 6 · Analizar
+(arq-architect)</a></li>
+<li><a href="#paso-7--firmar-persona" id="toc-paso-7--firmar-persona">Paso 7 · Firmar (persona)</a></li>
+<li><a href="#paso-8--publicar-y-cerrar-arq-manager" id="toc-paso-8--publicar-y-cerrar-arq-manager">Paso 8 · Publicar y
+cerrar (arq-manager)</a></li>
+<li><a href="#paso-9--plazo-vencido-arq-manager" id="toc-paso-9--plazo-vencido-arq-manager">Paso 9 · Plazo vencido
+(arq-manager)</a></li>
+</ul></li>
+<li><a href="#5-lo-que-el-agente-nunca-hace" id="toc-5-lo-que-el-agente-nunca-hace">5. Lo que el agente nunca
+hace</a></li>
+<li><a href="#6-seguimiento-diario" id="toc-6-seguimiento-diario">6.
+Seguimiento diario</a></li>
+<li><a href="#7-cuando-algo-falla" id="toc-7-cuando-algo-falla">7.
+Cuando algo falla</a></li>
+</ul>
+</nav>
+<main>
+<p>El mismo proceso de la <a href="flujo-manual.html">guía del flujo
+manual</a>, pero con un <strong>agente de código</strong> (Claude Code,
+Codex o Cursor) que hace el trabajo repetitivo. Leé primero el flujo
+manual: acá no se repite qué es cada paso, solo cómo se hace con el
+agente.</p>
+<h2 id="1-qué-cambia-y-qué-no">1. Qué cambia y qué no</h2>
+<table>
+<thead>
+<tr>
+<th>Lo hace el agente</th>
+<th>Lo sigue haciendo una persona</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pasar el pedido a un review con el formato correcto</td>
+<td>Pegarle el pedido (hoy no lo lee solo de la plataforma)</td>
+</tr>
+<tr>
+<td>Proponer las respuestas de clasificación, citando el pedido</td>
+<td><strong>Confirmar</strong> cada respuesta</td>
+</tr>
+<tr>
+<td>Armar la épica, las historias, las sub-tasks y el ticket del
+requirente</td>
+<td><strong>Aprobar</strong> la vista previa y correr el comando que
+escribe en Jira</td>
+</tr>
+<tr>
+<td>Calcular el plazo</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Revisar la información mínima y redactar preguntas concretas</td>
+<td>Leer las preguntas antes de publicarlas</td>
+</tr>
+<tr>
+<td>Analizar, proponer opciones y un veredicto</td>
+<td><strong>Firmar</strong> o devolver con cambios</td>
+</tr>
+<tr>
+<td>Redactar la devolución y el comentario corto</td>
+<td><strong>Hacer el click</strong> en la plataforma PRY</td>
+</tr>
+<tr>
+<td>Mover las tareas de Jira según el estado del review</td>
+<td>Asignar las tareas a las personas</td>
+</tr>
+</tbody>
+</table>
+<p>La regla de fondo: <strong>el agente prepara, una persona decide y
+publica.</strong> Nada sale hacia afuera (Jira, el requirente o la
+plataforma) sin que una persona lo apruebe y ejecute.</p>
+<h2 id="2-las-piezas">2. Las piezas</h2>
+<table>
+<thead>
+<tr>
+<th>Pieza</th>
+<th>Qué es</th>
+<th>Para qué sirve</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Agente de código</strong></td>
+<td>Claude Code, Codex o Cursor</td>
+<td>Le hablás en lenguaje natural y trabaja con las otras piezas</td>
+</tr>
+<tr>
+<td><strong>Skill <code>arq-manager</code></strong></td>
+<td>Instrucciones de coordinación para el agente</td>
+<td>Registrar, clasificar, abrir los tickets, cuidar el plazo, publicar.
+No opina de lo técnico</td>
+</tr>
+<tr>
+<td><strong>Skill <code>arq-architect</code></strong></td>
+<td>Instrucciones de revisión técnica para el agente</td>
+<td>Información mínima, análisis contra constraints, opciones y
+veredicto. No crea tickets ni publica</td>
+</tr>
+<tr>
+<td><strong>Herramienta <code>arq</code></strong></td>
+<td>Un comando que usan las dos skills</td>
+<td>Guarda el estado, valida las reglas y escribe en Jira solo cuando se
+lo pedís</td>
+</tr>
+<tr>
+<td><strong>Repo de reviews</strong></td>
+<td>La carpeta <code>arq-reviews</code></td>
+<td>Donde vive cada review. Es la fuente de verdad</td>
+</tr>
+<tr>
+<td><strong>MCP de la plataforma PRY</strong></td>
+<td>Conector para que el agente lea los pedidos directamente</td>
+<td><strong>Fase 2: todavía no existe.</strong> Hoy el pedido se pega
+como texto o captura</td>
+</tr>
+</tbody>
+</table>
+<p>Las dos skills nunca se llaman entre sí. Cada una mira el estado del
+review y sabe si le toca actuar.</p>
+<h2 id="3-antes-de-empezar">3. Antes de empezar</h2>
+<p>Una sola vez, con ayuda de alguien que ya lo tenga andando:</p>
+<ol type="1">
+<li><strong>Instalar</strong> la herramienta y las skills: en el repo
+<code>arq-review</code>, <code>./install.sh</code>.</li>
+<li><strong>Clonar el repo de reviews</strong>
+(<code>arq-reviews</code>) y abrir el agente <strong>parado en esa
+carpeta</strong>.</li>
+<li><strong>Credenciales de Jira</strong> en un archivo
+<code>.env</code> con <code>JIRA_BASE_URL</code>,
+<code>JIRA_EMAIL</code> y <code>JIRA_API_TOKEN</code>. El token es
+personal: no lo pegues en el chat ni lo compartas.</li>
+<li><strong>Probar</strong> que todo responde: pedile al agente
+&quot;mostrame el estado de PRY-2026-0028&quot;.</li>
+</ol>
+<h2 id="4-paso-a-paso-con-el-agente">4. Paso a paso con el agente</h2>
+<p>Para cada paso: <strong>qué le pedís</strong>, <strong>qué hace
+solo</strong> y <strong>qué confirmás vos</strong>. Las frases son
+ejemplos; podés pedirlo con tus palabras.</p>
+<blockquote>
+<p><strong>Los comandos que escriben en Jira los corrés vos</strong>, en
+tu terminal. El agente te los da armados. En Claude Code se corren desde
+el mismo chat poniendo <code>!</code> adelante. Todos llevan
+<code>--apply</code> y necesitan las credenciales cargadas:</p>
+<pre><code>set -a &amp;&amp; source &lt;ruta&gt;/.env &amp;&amp; set +a &amp;&amp; arq jira PRY-AAAA-NNNN --apply</code></pre>
+</blockquote>
+<h3 id="paso-1--registrar-arq-manager">Paso 1 · Registrar
+(arq-manager)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Registrá el PRY-2026-0031&quot;, y pegás el
+pedido completo o una captura de la plataforma.</li>
+<li><strong>Hace solo:</strong> copia el pedido tal cual, toma el
+contacto principal y el head, y crea el review en
+<code>recibido</code>.</li>
+<li><strong>Confirmás:</strong> que los emails del contacto y del head
+sean los correctos.</li>
+</ul>
+<h3 id="paso-2--clasificar-arq-manager">Paso 2 · Clasificar
+(arq-manager)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Hacé el triage del PRY-2026-0031&quot;.</li>
+<li><strong>Hace solo:</strong> propone sí o no para cada una de las
+seis preguntas, citando la frase del pedido que lo justifica.</li>
+<li><strong>Confirmás:</strong> cada respuesta. <strong>Decidís vos, no
+el modelo.</strong> Ante la duda, &quot;sí&quot;. Con tu ok queda
+<code>simple</code> o <code>complejo</code> y el estado pasa a
+<code>triado</code>.</li>
+</ul>
+<h3 id="paso-3--abrir-los-tickets-y-el-plazo-arq-manager">Paso 3 · Abrir
+los tickets y el plazo (arq-manager)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Armá el Jira del PRY-2026-0031&quot;.</li>
+<li><strong>Hace solo:</strong> te muestra una <strong>vista
+previa</strong> de la épica, las historias, las sub-tasks y el ticket
+del requirente, sin escribir nada. Si es complejo, te pregunta si hace
+falta la historia de validación técnica.</li>
+<li><strong>Confirmás:</strong> la vista previa. Después corrés vos el
+comando que te da (<code>arq jira PRY-2026-0031 --apply</code>). Crea la
+épica en PLATE y el ticket en PEHD a nombre del requirente, con el head
+de watcher y los dos linkeados. Si falla a la mitad, <strong>corré el
+mismo comando otra vez</strong>: retoma sin duplicar.</li>
+<li><strong>Después:</strong> &quot;arrancá el plazo&quot; fija el vencimiento a
+10 días hábiles. Si hay fecha comprometida antes, el agente te
+avisa.</li>
+</ul>
+<h3 id="paso-4--revisar-la-información-mínima-arq-architect">Paso 4 ·
+Revisar la información mínima (arq-architect)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Hacé el gap check del
+PRY-2026-0031&quot;.</li>
+<li><strong>Hace solo:</strong> lee el pedido y los links que pueda
+abrir, verifica que la documentación esté vigente contra el código y
+marca cada dato mínimo como presente o faltante, citando qué lo cubre.
+Si falta algo, escribe el análisis preliminar sin veredicto, redacta las
+preguntas para el requirente y pasa el estado a
+<code>esperando-info</code>.</li>
+<li><strong>Confirmás:</strong> que las preguntas sean concretas y
+entendibles para el requirente.</li>
+</ul>
+<h3 id="paso-5--publicar-el-pedido-de-información-arq-manager">Paso 5 ·
+Publicar el pedido de información (arq-manager)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Publicá el pedido de información del
+PRY-2026-0031&quot;.</li>
+<li><strong>Hace solo:</strong> te muestra el mensaje exacto que va a
+salir y controla que siga la plantilla.</li>
+<li><strong>Confirmás:</strong> el texto. Corrés el comando que te da
+(<code>arq jsm ... --apply</code>) y el comentario aparece en el ticket
+PEHD. Después corrés <code>arq jira PRY-2026-0031 --apply</code> para
+que el tablero refleje el avance.</li>
+<li><strong>Mientras esperás:</strong> cuando el requirente responda,
+volvé al paso 4 (&quot;el requirente respondió, revisá de nuevo&quot;). Si vence
+el plazo, el agente te lo dice y pasás al paso 9.</li>
+</ul>
+<h3 id="paso-6--analizar-arq-architect">Paso 6 · Analizar
+(arq-architect)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Analizá el PRY-2026-0031&quot;.</li>
+<li><strong>Hace solo:</strong> separa el pedido en partes, evalúa cada
+una contra las constraints, elige el punto más débil y propone el
+original + 2 opciones, la recomendación con condiciones, las señales
+para Cloud, Seguridad y FinOps, y el veredicto. Redacta la devolución y
+el comentario corto. Estado: <code>en-firma</code>.</li>
+<li><strong>Confirmás:</strong> nada todavía: la revisión real la hace
+el firmante en el paso siguiente.</li>
+</ul>
+<h3 id="paso-7--firmar-persona">Paso 7 · Firmar (persona)</h3>
+<ul>
+<li><strong>El firmante</strong> lee el review completo
+(<code>reviews/PRY-2026-0031.md</code>).
+<ul>
+<li><strong>De acuerdo:</strong> &quot;Firmá el PRY-2026-0031 como
+<code>&lt;tu usuario&gt;</code>&quot;. El estado pasa a
+<code>publicado</code>.</li>
+<li><strong>Pide cambios:</strong> &quot;Volvé el PRY-2026-0031 a análisis:
+<code>&lt;qué cambiar&gt;</code>&quot;. La firma se anula y hay que firmar de
+nuevo cuando vuelva.</li>
+</ul></li>
+</ul>
+<h3 id="paso-8--publicar-y-cerrar-arq-manager">Paso 8 · Publicar y
+cerrar (arq-manager)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Publicá la devolución del
+PRY-2026-0031&quot;.</li>
+<li><strong>Hace solo:</strong> te muestra la devolución y, si hay
+condiciones, las sub-tasks de seguimiento que va a crear. Te da el
+comentario corto para pegar en la plataforma y te dice si corresponde
+escalar a RFC en Product Brain.</li>
+<li><strong>Confirmás y ejecutás vos:</strong> los comandos
+<code>--apply</code> de la devolución y del seguimiento, el comentario
+pegado en la plataforma y <strong>el click en Aprobar o
+Rechazar</strong>.</li>
+<li><strong>Al final:</strong> &quot;Ya hice el click, cerrá el
+PRY-2026-0031&quot;. Pasa a <code>cerrado</code> y, con un último
+<code>arq jira ... --apply</code>, la épica queda en Done.</li>
+</ul>
+<h3 id="paso-9--plazo-vencido-arq-manager">Paso 9 · Plazo vencido
+(arq-manager)</h3>
+<ul>
+<li><strong>Le pedís:</strong> &quot;Venció el plazo del PRY-2026-0031&quot;.</li>
+<li><strong>Hace solo:</strong> pasa a <code>propuesta-rechazo</code> y
+redacta el mensaje de cierre.</li>
+<li><strong>Ejecutás vos:</strong> la publicación del mensaje, el
+rechazo en la plataforma (con el motivo y el link al ticket) y el
+cierre.</li>
+</ul>
+<h2 id="5-lo-que-el-agente-nunca-hace">5. Lo que el agente nunca
+hace</h2>
+<ul>
+<li><strong>Escribir en Jira por su cuenta.</strong> Siempre te da el
+comando y lo corrés vos.</li>
+<li><strong>Aprobar o rechazar en la plataforma PRY.</strong></li>
+<li><strong>Decidir la clasificación</strong> sin tu confirmación.</li>
+<li><strong>Firmar.</strong></li>
+<li><strong>Publicar texto libre al requirente:</strong> solo sale lo
+que sigue una plantilla, en el estado correcto y una sola vez.</li>
+<li><strong>Opinar por Cloud, Seguridad o FinOps.</strong></li>
+<li><strong>Asignar tareas o comentar en Jira</strong> por fuera del
+ticket del requirente.</li>
+</ul>
+<h2 id="6-seguimiento-diario">6. Seguimiento diario</h2>
+<table>
+<thead>
+<tr>
+<th>Querés saber</th>
+<th>Le pedís al agente</th>
+<th>O corrés vos</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>En qué estado está un pedido y quién tiene la pelota</td>
+<td>&quot;¿Cómo está el PRY-2026-0031?&quot;</td>
+<td><code>arq show PRY-2026-0031</code></td>
+</tr>
+<tr>
+<td>Cómo va en Jira: tareas hechas, en curso y pendientes, con su
+responsable</td>
+<td>&quot;Mostrame el tablero del PRY-2026-0031&quot;</td>
+<td><code>arq ver PRY-2026-0031</code></td>
+</tr>
+<tr>
+<td>Cuándo vence el plazo</td>
+<td>&quot;¿Cuándo vence el PRY-2026-0031?&quot;</td>
+<td><code>arq timebox PRY-2026-0031</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>arq ver</code> marca cada tarea con ✔ hecha, ◐ en curso y ○ por
+hacer. En una terminal, las claves de Jira se pueden clickear. Las
+tareas avanzan solas cada vez que se corre
+<code>arq jira ... --apply</code>: las cumplidas pasan a Done y la
+siguiente a En curso. Nunca se reabre nada.</p>
+<p><strong>Después de cada paso que cambia algo, el agente commitea el
+repo de reviews.</strong> Ese historial es el registro de qué se decidió
+y cuándo.</p>
+<h2 id="7-cuando-algo-falla">7. Cuando algo falla</h2>
+<table>
+<thead>
+<tr>
+<th>Mensaje o situación</th>
+<th>Qué hacer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&quot;No se encontró a <code>&lt;email&gt;</code> en Jira&quot;</td>
+<td>Pedir que den de alta al requirente en Jira y correr el mismo
+comando</td>
+</tr>
+<tr>
+<td>&quot;Jira rechazó el reporter&quot;</td>
+<td>Pedir para la cuenta el permiso <em>Modify reporter</em> en PEHD y
+repetir</td>
+</tr>
+<tr>
+<td>El comando falló a la mitad</td>
+<td>Correr el mismo comando otra vez: retoma sin duplicar</td>
+</tr>
+<tr>
+<td>&quot;Sin transición a Done&quot; o &quot;Sin transición a En curso&quot;</td>
+<td>Mover esas tareas a mano en Jira; el workflow no tiene esa
+transición</td>
+</tr>
+<tr>
+<td>El agente dice que el mensaje no sigue la plantilla</td>
+<td>No forzarlo: pedirle que lo rehaga sobre la plantilla</td>
+</tr>
+<tr>
+<td>&quot;Transición inválida&quot;</td>
+<td>El pedido no está en el estado que hace falta para ese paso:
+preguntale al agente en qué estado está y qué falta</td>
+</tr>
+<tr>
+<td>Alguien editó la descripción de una tarea en Jira</td>
+<td>Se va a pisar en el próximo <code>--apply</code>. Las notas van en
+comentarios</td>
+</tr>
+<tr>
+<td>Renombraste una tarea en Jira</td>
+<td>No pasa nada: <code>arq</code> la reconoce por un identificador
+interno, no por el título</td>
+</tr>
+</tbody>
+</table>
+</main>
+</div>
+<footer>Generado desde el Markdown de <code>docs/guias/</code> del repo arq-review. Para cambiar el contenido, editá el <code>.md</code> y corré <code>docs/guias/build/build.sh</code>.</footer>
+<dialog class="lightbox" aria-label="Imagen ampliada">
+  <div class="bar"><button type="button" data-fit>Ajustar a la pantalla</button><button type="button" data-close aria-label="Cerrar">✕ Cerrar</button></div>
+  <div class="stage"><img alt></div>
+</dialog>
+<script>
+(function () {
+  var root = document.documentElement, key = "arq-guia-tema";
+  try { var saved = localStorage.getItem(key); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+  document.querySelector(".theme-toggle").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") ? root.getAttribute("data-theme") === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem(key, next); } catch (e) {}
+  });
+
+  // Tables scroll sideways on narrow screens instead of the page.
+  document.querySelectorAll("main table").forEach(function (t) {
+    var wrap = document.createElement("div"); wrap.className = "table-wrap";
+    t.parentNode.insertBefore(wrap, t); wrap.appendChild(t);
+  });
+
+  // The checklist can be ticked; it is remembered in this browser only.
+  var boxes = document.querySelectorAll("main input[type=checkbox]");
+  if (boxes.length) {
+    var store = "arq-checklist:" + location.pathname, state = {};
+    try { state = JSON.parse(localStorage.getItem(store) || "{}"); } catch (e) {}
+    boxes.forEach(function (box, i) {
+      box.disabled = false; box.checked = !!state[i];
+      box.addEventListener("change", function () {
+        state[i] = box.checked;
+        try { localStorage.setItem(store, JSON.stringify(state)); } catch (e) {}
+      });
+    });
+    var list = boxes[0].closest("ul"), tools = document.createElement("p");
+    tools.className = "checklist-tools";
+    tools.innerHTML = 'Las casillas se guardan solo en este navegador. <button type="button">Desmarcar todo</button>';
+    tools.querySelector("button").addEventListener("click", function () {
+      boxes.forEach(function (b) { b.checked = false; }); state = {};
+      try { localStorage.removeItem(store); } catch (e) {}
+    });
+    list.parentNode.insertBefore(tools, list.nextSibling);
+  }
+
+  // Images open full size in a modal so their labels can be read.
+  var box = document.querySelector("dialog.lightbox"), big = box.querySelector("img");
+  var fitBtn = box.querySelector("[data-fit]");
+  var fullWidth = 0;
+  function setFit(fit) {
+    big.classList.toggle("fit", fit);
+    big.style.width = fit ? "" : fullWidth + "px";  // SVGs have no useful natural size: twice what the page shows
+    fitBtn.textContent = fit ? "Tamaño completo" : "Ajustar a la pantalla";
+  }
+  document.querySelectorAll("main img").forEach(function (img) {
+    img.tabIndex = 0; img.setAttribute("role", "button"); img.title = "Click para ampliar";
+    var hint = document.createElement("span"); hint.className = "zoom-hint"; hint.textContent = "Click en la imagen para verla en grande";
+    img.insertAdjacentElement("afterend", hint);
+    function open() { big.src = img.src; big.alt = img.alt; fullWidth = Math.min(1800, Math.round(img.clientWidth * 2)); setFit(false); box.showModal(); box.scrollTo(0, 0); }
+    img.addEventListener("click", open);
+    img.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+  });
+  fitBtn.addEventListener("click", function () { setFit(!big.classList.contains("fit")); });
+  box.querySelector("[data-close]").addEventListener("click", function () { box.close(); });
+  box.addEventListener("click", function (e) { if (e.target === box || e.target.classList.contains("stage")) box.close(); });
+  big.addEventListener("click", function () { box.close(); });
+
+  // Highlight the section being read in the table of contents.
+  var links = {};
+  document.querySelectorAll("nav#toc a").forEach(function (a) { links[decodeURIComponent(a.hash.slice(1))] = a; });
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting || !links[en.target.id]) return;
+        Object.values(links).forEach(function (a) { a.classList.remove("active"); });
+        links[en.target.id].classList.add("active");
+      });
+    }, { rootMargin: "0px 0px -75% 0px" });
+    document.querySelectorAll("main h2[id], main h3[id]").forEach(function (h) { io.observe(h); });
+  }
+})();
+</script>
+</body>
+</html>

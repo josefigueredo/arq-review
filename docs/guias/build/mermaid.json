@@ -1,0 +1,3 @@
+{"theme": "base", "themeVariables": {"fontFamily": "Inter, system-ui, sans-serif", "fontSize": "15px",
+ "primaryColor": "#e6eefc", "primaryBorderColor": "#2f6fde", "primaryTextColor": "#1d2330",
+ "lineColor": "#5c6577", "edgeLabelBackground": "#ffffff", "tertiaryColor": "#ffffff"}}

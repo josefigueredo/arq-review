@@ -14,6 +14,8 @@ análisis vive en git.
 - Presentación para quien opera el proceso desde su agente de código (Claude Code, Codex o Cursor): `docs/presentacion/seguimiento-agente.html`
 - Guías para alguien nuevo en el proceso: `docs/guias/flujo-manual.md` (todo a mano, para entender y validar el flujo) y
   `docs/guias/flujo-con-agente.md` (lo mismo con el agente y las skills)
+  Cada una tiene su versión HTML autocontenida al lado (`.html`); se regeneran con `docs/guias/build/build.sh`
+  (necesita `pandoc` y `mmdc`).
 
 ## Instalar
 

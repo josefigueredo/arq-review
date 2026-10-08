@@ -4,7 +4,7 @@ Cómo se revisa un pedido PRY de punta a punta **haciéndolo todo a mano**, sin 
 `arq`. Sirve para dos cosas: entender el proceso si sos nuevo, y validar que cada paso tiene sentido antes de
 automatizarlo. Si un paso te resulta confuso o inútil hecho a mano, también lo va a ser automatizado: avisá.
 
-La versión con agente está en [flujo-con-agente.md](flujo-con-agente.md). Los pasos son los mismos; cambia quién
+La versión con agente está en la [guía del flujo con agente](flujo-con-agente.md). Los pasos son los mismos; cambia quién
 hace el trabajo repetitivo.
 
 ## 1. Qué es una revisión de Arquitectura
@@ -50,7 +50,7 @@ Cada pedido está siempre en **un** estado. Estos son los estados y cómo se pas
 
 ```mermaid
 stateDiagram-v2
-    direction LR
+    direction TB
     [*] --> recibido: llega el pedido
     recibido --> triado: se clasifica
     triado --> esperando_info: falta información

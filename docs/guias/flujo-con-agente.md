@@ -1,6 +1,6 @@
 # Revisión de Arquitectura · Flujo con agente
 
-El mismo proceso de [flujo-manual.md](flujo-manual.md), pero con un **agente de código** (Claude Code, Codex o
+El mismo proceso de la [guía del flujo manual](flujo-manual.md), pero con un **agente de código** (Claude Code, Codex o
 Cursor) que hace el trabajo repetitivo. Leé primero el flujo manual: acá no se repite qué es cada paso, solo cómo se
 hace con el agente.
 

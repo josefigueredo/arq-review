@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title$</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #1d2330; --muted: #5c6577; --line: #d9dee7;
+    --accent: #2f6fde; --accent-soft: #e6eefc; --ok: #1f8a5b; --warn: #b7791f; --warn-soft: #fbf3e4;
+    --code-bg: #eef1f6; --shadow: 0 6px 24px rgba(20, 30, 60, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --surface: #1a1f28; --text: #e7eaf0; --muted: #9aa3b5; --line: #2c3442;
+      --accent: #6aa0ff; --accent-soft: #1f2d48; --ok: #4cc38a; --warn: #e3a63c; --warn-soft: #2d2618;
+      --code-bg: #232a36; --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151b; --surface: #1a1f28; --text: #e7eaf0; --muted: #9aa3b5; --line: #2c3442;
+    --accent: #6aa0ff; --accent-soft: #1f2d48; --ok: #4cc38a; --warn: #e3a63c; --warn-soft: #2d2618;
+    --code-bg: #232a36; --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .hero { background: linear-gradient(135deg, #2f6fde, #6b4fbb); color: #fff; padding: 48px 16px 40px; }
+  .hero-inner { max-width: 1180px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 12px; font-weight: 600; opacity: .85; margin: 0 0 8px; }
+  .hero h1 { margin: 0; font-size: clamp(28px, 4vw, 42px); line-height: 1.15; letter-spacing: -.01em; }
+  .theme-toggle {
+    flex: none; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.12); color: #fff;
+    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 0 16px 64px; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 32px; }
+  nav#toc {
+    position: sticky; top: 16px; align-self: start; margin-top: -24px; max-height: calc(100vh - 32px); overflow: auto;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px; box-shadow: var(--shadow);
+  }
+  nav#toc::before { content: "Contenido"; display: block; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  nav#toc ul { list-style: none; margin: 0; padding: 0; }
+  nav#toc ul ul { padding-left: 12px; border-left: 2px solid var(--line); margin: 4px 0 8px 4px; }
+  nav#toc a { overflow-wrap: anywhere; display: block; padding: 3px 6px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 14px; line-height: 1.35; }
+  nav#toc ul ul a { color: var(--muted); font-size: 13px; }
+  nav#toc a:hover, nav#toc a.active { background: var(--accent-soft); color: var(--accent); }
+  main {
+    margin-top: -24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    padding: 36px clamp(18px, 4vw, 48px); box-shadow: var(--shadow); min-width: 0;
+  }
+  main > p:first-child { font-size: 18px; color: var(--muted); margin-top: 0; }
+  h2 { font-size: 26px; margin: 48px 0 16px; padding-top: 24px; border-top: 1px solid var(--line); letter-spacing: -.01em; }
+  main > h2:first-of-type { border-top: 0; padding-top: 0; margin-top: 28px; }
+  h3 {
+    font-size: 19px; margin: 32px 0 12px; padding: 10px 14px; background: var(--accent-soft); color: var(--accent);
+    border-radius: 10px; border-left: 4px solid var(--accent);
+  }
+  a { color: var(--accent); }
+  strong { font-weight: 650; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px; font: 0.88em/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 10px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .table-wrap { overflow-x: auto; margin: 16px 0 20px; border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  th { background: var(--bg); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--bg); }
+  blockquote {
+    margin: 20px 0; padding: 14px 18px; background: var(--warn-soft); border-left: 4px solid var(--warn);
+    border-radius: 0 10px 10px 0;
+  }
+  blockquote p { margin: 6px 0; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  li > ul, li > ol { margin: 4px 0; }
+  ul.task-list, ul:has(> li > input[type=checkbox]) { list-style: none; padding-left: 4px; }
+  li:has(> input[type=checkbox]) { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; }
+  li:has(> input[type=checkbox]:checked) { color: var(--muted); text-decoration: line-through; }
+  input[type=checkbox] { width: 18px; height: 18px; margin-top: 4px; accent-color: var(--ok); flex: none; cursor: pointer; }
+  figure, p:has(> img) { margin: 20px 0; text-align: center; }
+  img { max-height: 900px; max-width: 100%; height: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  figcaption { display: none; }
+  main img { cursor: zoom-in; transition: box-shadow .15s; }
+  main img:hover { box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+  .zoom-hint { display: block; margin-top: 6px; font-size: 13px; color: var(--muted); }
+  dialog.lightbox {
+    width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0;
+    background: rgba(10, 14, 22, .96); overflow: auto;
+  }
+  dialog.lightbox::backdrop { background: transparent; }
+  dialog.lightbox .stage { min-width: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 56px 16px 24px; }
+  dialog.lightbox img {
+    flex: none; max-width: none; max-height: none; width: auto; height: auto; cursor: zoom-out;
+    border: 0; border-radius: 12px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  dialog.lightbox img.fit { width: auto; max-width: calc(100vw - 32px); max-height: calc(100vh - 80px); }
+  dialog.lightbox .bar { position: fixed; top: 12px; right: 12px; display: flex; gap: 8px; z-index: 1; }
+  dialog.lightbox button {
+    font: inherit; font-size: 14px; color: #fff; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3);
+    border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  }
+  .checklist-tools { font-size: 13px; color: var(--muted); }
+  .checklist-tools button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+  footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 40px; color: var(--muted); font-size: 13px; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    nav#toc { position: static; max-height: none; margin-top: -24px; }
+    main { margin-top: 0; }
+  }
+  @media print {
+    .hero { background: none; color: var(--text); padding: 0 0 16px; }
+    .theme-toggle, nav#toc, .checklist-tools { display: none; }
+    .layout { display: block; padding: 0; }
+    main { border: 0; box-shadow: none; padding: 0; margin: 0; }
+    h2, h3 { break-after: avoid; }
+    tr, li { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow">Revisión de Arquitectura · Guía para personas nuevas en el proceso</p>
+      <h1>$title$</h1>
+    </div>
+    <button class="theme-toggle" type="button" aria-label="Cambiar tema claro u oscuro">◐ Tema</button>
+  </div>
+</header>
+<div class="layout">
+$if(toc)$
+<nav id="toc" aria-label="Contenido">
+$toc$
+</nav>
+$endif$
+<main>
+$body$
+</main>
+</div>
+<footer>Generado desde el Markdown de <code>docs/guias/</code> del repo arq-review. Para cambiar el contenido, editá el <code>.md</code> y corré <code>docs/guias/build/build.sh</code>.</footer>
+<dialog class="lightbox" aria-label="Imagen ampliada">
+  <div class="bar"><button type="button" data-fit>Ajustar a la pantalla</button><button type="button" data-close aria-label="Cerrar">✕ Cerrar</button></div>
+  <div class="stage"><img alt=""></div>
+</dialog>
+<script>
+(function () {
+  var root = document.documentElement, key = "arq-guia-tema";
+  try { var saved = localStorage.getItem(key); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+  document.querySelector(".theme-toggle").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") ? root.getAttribute("data-theme") === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem(key, next); } catch (e) {}
+  });
+
+  // Tables scroll sideways on narrow screens instead of the page.
+  document.querySelectorAll("main table").forEach(function (t) {
+    var wrap = document.createElement("div"); wrap.className = "table-wrap";
+    t.parentNode.insertBefore(wrap, t); wrap.appendChild(t);
+  });
+
+  // The checklist can be ticked; it is remembered in this browser only.
+  var boxes = document.querySelectorAll("main input[type=checkbox]");
+  if (boxes.length) {
+    var store = "arq-checklist:" + location.pathname, state = {};
+    try { state = JSON.parse(localStorage.getItem(store) || "{}"); } catch (e) {}
+    boxes.forEach(function (box, i) {
+      box.disabled = false; box.checked = !!state[i];
+      box.addEventListener("change", function () {
+        state[i] = box.checked;
+        try { localStorage.setItem(store, JSON.stringify(state)); } catch (e) {}
+      });
+    });
+    var list = boxes[0].closest("ul"), tools = document.createElement("p");
+    tools.className = "checklist-tools";
+    tools.innerHTML = 'Las casillas se guardan solo en este navegador. <button type="button">Desmarcar todo</button>';
+    tools.querySelector("button").addEventListener("click", function () {
+      boxes.forEach(function (b) { b.checked = false; }); state = {};
+      try { localStorage.removeItem(store); } catch (e) {}
+    });
+    list.parentNode.insertBefore(tools, list.nextSibling);
+  }
+
+  // Images open full size in a modal so their labels can be read.
+  var box = document.querySelector("dialog.lightbox"), big = box.querySelector("img");
+  var fitBtn = box.querySelector("[data-fit]");
+  var fullWidth = 0;
+  function setFit(fit) {
+    big.classList.toggle("fit", fit);
+    big.style.width = fit ? "" : fullWidth + "px";  // SVGs have no useful natural size: twice what the page shows
+    fitBtn.textContent = fit ? "Tamaño completo" : "Ajustar a la pantalla";
+  }
+  document.querySelectorAll("main img").forEach(function (img) {
+    img.tabIndex = 0; img.setAttribute("role", "button"); img.title = "Click para ampliar";
+    var hint = document.createElement("span"); hint.className = "zoom-hint"; hint.textContent = "Click en la imagen para verla en grande";
+    img.insertAdjacentElement("afterend", hint);
+    function open() { big.src = img.src; big.alt = img.alt; fullWidth = Math.min(1800, Math.round(img.clientWidth * 2)); setFit(false); box.showModal(); box.scrollTo(0, 0); }
+    img.addEventListener("click", open);
+    img.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+  });
+  fitBtn.addEventListener("click", function () { setFit(!big.classList.contains("fit")); });
+  box.querySelector("[data-close]").addEventListener("click", function () { box.close(); });
+  box.addEventListener("click", function (e) { if (e.target === box || e.target.classList.contains("stage")) box.close(); });
+  big.addEventListener("click", function () { box.close(); });
+
+  // Highlight the section being read in the table of contents.
+  var links = {};
+  document.querySelectorAll("nav#toc a").forEach(function (a) { links[decodeURIComponent(a.hash.slice(1))] = a; });
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting || !links[en.target.id]) return;
+        Object.values(links).forEach(function (a) { a.classList.remove("active"); });
+        links[en.target.id].classList.add("active");
+      });
+    }, { rootMargin: "0px 0px -75% 0px" });
+    document.querySelectorAll("main h2[id], main h3[id]").forEach(function (h) { io.observe(h); });
+  }
+})();
+</script>
+</body>
+</html>
