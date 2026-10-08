@@ -12,6 +12,8 @@ análisis vive en git.
 - Diagramas de los boards de Jira y de la secuencia completa: `docs/diagrams/jira-flujo.md`
 - Presentación para público no técnico (HTML autocontenido): `docs/presentacion/revision-arquitectura.html`
 - Presentación para quien opera el proceso desde su agente de código (Claude Code, Codex o Cursor): `docs/presentacion/seguimiento-agente.html`
+- Guías para alguien nuevo en el proceso: `docs/guias/flujo-manual.md` (todo a mano, para entender y validar el flujo) y
+  `docs/guias/flujo-con-agente.md` (lo mismo con el agente y las skills)
 
 ## Instalar
 
