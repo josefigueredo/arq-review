@@ -9,6 +9,7 @@ análisis vive en git.
 - Skills: `arq-manager` (coordinación) y `arq-architect` (juicio técnico)
 - Contrato (lo mantiene Arquitectura): `contract/` — `constraints.md`, `triage.md`, `minimum-input.md`, `templates/`
 - Guía para agentes que modifican este repo: `AGENTS.md`
+- Diagramas de los boards de Jira y de la secuencia completa: `docs/diagrams/jira-flujo.md`
 
 ## Instalar
 
