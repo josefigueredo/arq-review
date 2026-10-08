@@ -5,7 +5,7 @@ constraints, propuesta original + 2 opciones para el componente más débil, se�
 veredicto propuesto. Jira es el sistema de registro (una épica por pedido y un ticket donde conversa el requirente); el
 análisis vive en git.
 
-- Diseño: `docs/superpowers/specs/2026-10-07-arq-review-design.md` (decisiones D1–D14, lecciones de la primera corrida)
+- Diseño: `docs/superpowers/specs/2026-10-07-arq-review-design.md` (decisiones D1–D16, lecciones de la primera corrida)
 - Skills: `arq-manager` (coordinación) y `arq-architect` (juicio técnico)
 - Contrato (lo mantiene Arquitectura): `contract/` — `constraints.md`, `triage.md`, `minimum-input.md`, `templates/`
 - Guía para agentes que modifican este repo: `AGENTS.md`

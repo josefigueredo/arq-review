@@ -160,6 +160,7 @@ se decidió y cuándo.
 | "No se encontró a `<email>` en Jira" | Pedir que den de alta al requirente en Jira y correr el mismo comando |
 | "Jira rechazó el reporter" | Pedir para la cuenta el permiso *Modify reporter* en PEHD y repetir |
 | El comando falló a la mitad | Correr el mismo comando otra vez: retoma sin duplicar |
+| Dice "tareas movidas a Done: 0, a En curso: 0" | Es normal si ya estaban así: no mueve lo que ya avanzó. Confirmalo con `arq ver` |
 | "Sin transición a Done" o "Sin transición a En curso" | Mover esas tareas a mano en Jira; el workflow no tiene esa transición |
 | El agente dice que el mensaje no sigue la plantilla | No forzarlo: pedirle que lo rehaga sobre la plantilla |
 | "Transición inválida" | El pedido no está en el estado que hace falta para ese paso: preguntale al agente en qué estado está y qué falta |

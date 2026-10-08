@@ -14,4 +14,14 @@
   nunca para que pase una salida del architect.
 - Las skills (`skills/*/SKILL.md`) solo nombran subcomandos que existen y nunca corren `--apply` sin `!`:
   `tests/test_skills.py` lo verifica.
-- Commits: conventional commits, sin atribución de IA. Rama corta y merge fast-forward a `main`.
+- El estado de las tareas sigue al review (D16, `arqlib/progress.py`): solo hacia adelante. Las transiciones se eligen
+  por categoría de status (`done`, `indeterminate`) y no por nombre, porque cada workflow nombra distinto (en PLATE
+  "en curso" es **PROCESANDO**); la regex de nombre solo desempata.
+- Documentación: archivos locales en el repo, nunca artefactos ni docs de claude.ai (no se pueden compartir).
+  - `docs/guias/*.md` son la fuente; los `.html` de al lado se regeneran con `docs/guias/build/build.sh` (pandoc +
+    mmdc) y se commitean juntos. Si cambian los pasos, las tareas de `structure.py` o un subcomando, actualizar las
+    dos guías.
+  - Los PNG de `docs/diagrams/` se regeneran con el comando que figura en `jira-flujo.md`.
+  - Una decisión nueva va como `D<n>` en el spec y su rango se actualiza en el README.
+- Commits: conventional commits, sin atribución de IA. Rama corta y merge fast-forward a `main`. El push lo hace el
+  usuario.

@@ -292,3 +292,9 @@ tiene acceso. Devuelve el mismo pedido normalizado que el intake manual. Sin end
   revisión está en el camino crítico: el pedido de información prioriza lo que bloquea esa fecha.
 - **Goldens.** Se corrigen solo cuando cambia la evidencia (triage real, documentación vigente), nunca para que pase
   una salida del architect.
+- **Workflows con otros nombres.** En PLATE el estado "en curso" se llama PROCESANDO; las transiciones se buscan por
+  categoría de status y el nombre solo desempata.
+- **"Movidas: 0" no es un error.** Un `--apply` repetido no mueve lo que ya avanzó; el tablero real se confirma con
+  `arq ver`.
+- **Documentación compartible.** Las guías y presentaciones viven como archivos locales (Markdown fuente + HTML
+  autocontenido), no como artefactos de claude.ai, porque esos no se pueden compartir con el equipo.
