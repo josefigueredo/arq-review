@@ -98,6 +98,23 @@ class StructureTest(unittest.TestCase):
         plan = build_plan(meta("complejo"), review_body="## Lo que entendimos\n\nMigrar PB `[pedido]`.\n")
         self.assertIn("h3. Lo que entendimos", plan["epic"]["description"])
 
+    def test_descriptions_are_jira_wiki_without_ellipsis_placeholders(self):
+        full = dict(meta("complejo"), contacto="requester@example.com", head="reviewer@example.com")
+        plan = build_plan(full, validacion=True)
+        nodes = plan["items"] + [s for i in plan["items"] for s in i["subtasks"]]
+        for node in nodes:
+            self.assertNotIn("`", node["description"], node["node"])
+            self.assertNotIn("...", node["description"], node["node"])
+        normalizar = next(s for i in plan["items"] for s in i["subtasks"] if s["node"] == "intake/normalizar")
+        self.assertIn('{{arq new PRY-2026-0028 --nombre "PoC modelos IA Locales" --pedido <archivo con el pedido> '
+                      '--contacto requester@example.com --head reviewer@example.com}}', normalizar["description"])
+
+    def test_commands_without_known_values_say_what_goes_there(self):
+        plan = build_plan(meta("complejo"))  # sin contacto ni head
+        normalizar = next(s for i in plan["items"] for s in i["subtasks"] if s["node"] == "intake/normalizar")
+        self.assertIn("--contacto <email del contacto>}}", normalizar["description"])
+        self.assertNotIn("--head", normalizar["description"])
+
     def test_requires_triage(self):
         with self.assertRaisesRegex(StructureError, "arq triage"):
             build_plan(meta(""))
