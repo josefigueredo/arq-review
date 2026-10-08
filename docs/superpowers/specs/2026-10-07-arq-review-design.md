@@ -304,3 +304,10 @@ tiene acceso. Devuelve el mismo pedido normalizado que el intake manual. Sin end
 - **Evidencia antes que supuestos (PRY-2026-0028).** Los scores de los proveedores no son comparables: Qwen3.6-27B se
   anuncia con 77,2 % en SWE-bench Verified y saca 31,2 % en SWE-rebench. Un supuesto de contexto (48k tokens) quedó
   siete veces corto frente al uso medido (p50 341k). Medir primero y modelar el uso por perfiles, no un promedio.
+- **Revisión independiente de los números.** Una calculadora que crece por iteraciones termina con secciones que
+  responden la misma pregunta de forma distinta. Antes de publicarla, un revisor sin contexto recalcula escenarios
+  desde cero y compara secciones; los valores imposibles (0 horas, una instancia que no existe) se tratan como
+  indefinidos, nunca como cero.
+- **Mostrar siempre todas las alternativas.** Un punto de equilibrio es siempre "contra qué": cuando aparece una
+  opción más barata (Bedrock por token), la GPU sale del plan pero su comparación contra los asientos se sigue
+  mostrando, porque vuelve a ser la respuesta si la otra opción se descarta.
