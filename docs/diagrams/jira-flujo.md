@@ -3,6 +3,15 @@
 Ejemplo real: **PRY-2026-0028 · PoC modelos IA Locales** (nivel `complejo`), estado al 2026-10-08. Pide Juan Pablo
 Fernández; su head es Felipe López. La versión para público no técnico está en `docs/presentacion/revision-arquitectura.html`.
 
+Hay una imagen de cada diagrama al lado de este archivo, para pegar donde no se renderiza Mermaid (Confluence,
+presentaciones): `jira-flujo-boards.png` y `jira-flujo-secuencia.png`. Si cambia un diagrama, se regeneran con:
+
+```bash
+mmdc -i docs/diagrams/jira-flujo.md -o /tmp/jira-flujo.png -b white -w 2400 \
+  && cp /tmp/jira-flujo-1.png docs/diagrams/jira-flujo-boards.png \
+  && cp /tmp/jira-flujo-2.png docs/diagrams/jira-flujo-secuencia.png
+```
+
 ## 1. Boards PLATE y PEHD: issues, jerarquía y orden de ejecución
 
 - Cada issue: **número de orden de ejecución · clave de Jira · nombre**.
