@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 import helpers
-from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal
+from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal, sync_progress
 from arqlib.config import DEFAULT_CONFIG
 from arqlib.jira import JiraError
 from arqlib.structure import build_plan, followup_plan
@@ -71,6 +71,18 @@ class ApplyTest(unittest.TestCase):
         jira.properties = {k: {"id": v["id"]} for k, v in jira.properties.items()}  # sin hash: creado por arq viejo
         self.assertEqual(len(apply_plan(plan(), jira, "ARQ", TYPES)["updated"]), 7)
         self.assertEqual(apply_plan(plan(), jira, "ARQ", TYPES)["updated"], [])
+
+    def test_sync_progress_moves_only_forward_and_reports_what_it_cannot(self):
+        jira = helpers.FakeJira()
+        result = apply_plan(plan(), jira, "ARQ", TYPES)
+        nodes = result["nodes"]
+        jira.issues[nodes["revision/gap-check"]]["no_done"] = True
+        moved = sync_progress(jira, "pry:2026-0028", nodes, {"revision/triage", "revision/gap-check"})
+        self.assertEqual(moved["moved"], [nodes["revision/triage"]])
+        self.assertEqual(moved["blocked"], [nodes["revision/gap-check"]])
+        self.assertEqual(jira.issues[nodes["revision/triage"]]["category"], "done")
+        again = sync_progress(jira, "pry:2026-0028", nodes, {"revision/triage"})
+        self.assertEqual(again["moved"], [])  # ya estaba en done: no se toca
 
     def test_renamed_issue_is_not_duplicated(self):
         jira = helpers.FakeJira()

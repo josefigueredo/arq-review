@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Callable, Dict, List, Optional, Tuple
 
-SYMBOL = {"todo": "○", "in_progress": "◐", "done": "●"}
+SYMBOL = {"todo": "○", "in_progress": "◐", "done": "✔"}
 _NUMBERED = re.compile(r"([A-Z][A-Z0-9]*)-(\d+)")
 
 

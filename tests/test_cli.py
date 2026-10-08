@@ -241,6 +241,17 @@ class CliTest(unittest.TestCase):
         self.assertIn("descripciones actualizadas: 1", run(repo, "jira", PRY, "--apply", fake=fake)[1])
         self.assertIn("*Input faltante:* costo_estimado", fake.issues["ARQ-1"]["description"])
 
+    def test_jira_apply_moves_finished_tasks_to_done(self):
+        repo, fake = ready_repo(), helpers.FakeJira()
+        run(repo, "triage", PRY, "--answers", ALL_NO)
+        run(repo, "timebox", PRY)
+        code, out, _ = run(repo, "jira", PRY, "--apply", fake=fake)
+        self.assertEqual(code, 0)
+        self.assertIn("tareas movidas a Done: 1", out)  # triage y apertura (normalizar no existe en nivel simple)
+        done = sorted(i["summary"] for i in fake.issues.values() if i.get("category") == "done")
+        self.assertEqual(done, ["Triage y apertura"])
+        self.assertIn("tareas movidas a Done: 0", run(repo, "jira", PRY, "--apply", fake=fake)[1])
+
     def test_bad_pry_never_touches_disk(self):
         repo = helpers.make_repo()
         run(repo, "init")

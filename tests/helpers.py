@@ -69,6 +69,12 @@ class FakeJira:
                  "category": i.get("category", "todo"), "parent": i["parent"], "assignee": i.get("assignee")}
                 for k, i in self.issues.items() if label in i["labels"] and k not in self.hidden]
 
+    def transition_done(self, key: str) -> Optional[str]:
+        if self.issues[key].get("no_done"):
+            return None
+        self.issues[key].update(status="Done", category="done")
+        return "Done"
+
     def update_description(self, key: str, text: str) -> None:
         self.issues[key]["description"] = text
 

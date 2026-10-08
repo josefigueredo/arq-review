@@ -66,8 +66,9 @@ se puede repetir mientras no exista la épica.
 6. Después del `--apply`, verificar en la salida `creados N, existentes M` y el ticket del requirente. Renombrar un
    issue a mano en Jira es seguro: `arq` lo reconoce por su ID estable (`arq.node`), no por el texto.
 7. **Cada vez que el review cambia** (gap check, análisis, firma, cierre), volver a darle al usuario
-   `! arq jira PRY-AAAA-NNNN --apply`: actualiza la descripción de la épica con el resumen del review, para que Jira
-   muestre lo mismo que git. Las descripciones no se editan a mano en Jira (se pisan); las notas van en comentarios.
+   `! arq jira PRY-AAAA-NNNN --apply`: actualiza la descripción de la épica con el resumen del review y pasa a Done
+   las tareas que ya se cumplieron, para que Jira muestre lo mismo que git. Si un workflow no tiene transición a Done,
+   el comando lo avisa y esa tarea se mueve a mano. Las descripciones no se editan a mano en Jira (se pisan); las notas van en comentarios.
 
 ## 4. Plazo y pedido de información
 

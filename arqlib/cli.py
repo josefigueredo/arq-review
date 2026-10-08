@@ -11,7 +11,8 @@ from typing import Callable, List, Mapping, Optional
 from arqlib import config as cfg
 from arqlib import fields, review, state, triage
 from arqlib.board import render_board
-from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal, sync_epic
+from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal, sync_epic, sync_progress
+from arqlib.progress import done_nodes
 from arqlib.constraints import lint
 from arqlib.evaluate import evaluate_files
 from arqlib.jira import Jira, JiraError, check_key
@@ -165,8 +166,13 @@ def _jira(ctx: Context, args) -> int:
         raise
     if created:  # the epic was written before the ticket existed: bring its summary up to date now
         sync_epic(client, result["epica"], build_plan(meta, validacion=args.con_validacion, review_body=body)["epic"])
+    published = any(e.get("action") in ("jsm-comment", "comment") and e.get("key") == meta.get("jsm") and e.get("public")
+                    for e in read_entries(ctx.repo))
+    progress = sync_progress(client, labels[0], result["nodes"], done_nodes(meta, plan, info_published=published))
     print(f"épica: {result['epica']} (creados {len(result['created'])}, existentes {len(result['reused'])}; "
-          f"descripciones actualizadas: {len(result['updated'])})")
+          f"descripciones actualizadas: {len(result['updated'])}; tareas movidas a Done: {len(progress['moved'])})")
+    if progress["blocked"]:
+        print("sin transición a Done en su workflow (moverlas a mano): " + ", ".join(progress["blocked"]))
     print(f"jsm: {jsm} ({'creado' if created else 'ya existía'}; labels, participantes y link al día)")
     return 0
 

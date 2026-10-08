@@ -61,8 +61,8 @@ flowchart LR
 
 Camino feliz de PRY-2026-0028, desde que entra a la plataforma PRY hasta un cierre con "aprobar con condiciones".
 Hasta el paso de la respuesta de Juan Pablo ya ocurrió (datos reales); lo posterior es ilustrativo.
-Cada `--apply` lo corre una persona; cada paso que cambia el review se commitea en `arq-reviews`. El estado de las
-tareas en PLATE se mueve a mano (todavía no hay transición automática).
+Cada `--apply` lo corre una persona; cada paso que cambia el review se commitea en `arq-reviews`. Cada `arq jira --apply`
+pasa además a Done las tareas de PLATE que el review ya da por cumplidas.
 
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 210, "actorMargin": 130, "messageMargin": 42, "boxMargin": 12, "noteMargin": 12}}}%%
@@ -105,7 +105,7 @@ sequenceDiagram
             EM->>CLI: arq jsm --public --template jsm-pedido-info --apply
             CLI->>PEHD: 11 preguntas concretas en PEHD-86 (8/10)
             EM->>CLI: arq jira --apply
-            CLI->>PLATE: PLATE-614 muestra faltantes, costo como punto débil y señales
+            CLI->>PLATE: PLATE-614 muestra faltantes y señales · tareas cumplidas a Done
             Req->>PEHD: responde en PEHD-86 (pendiente, hasta 21/10)
         end
         Arq->>CLI: arq set faltantes= (vacío) · arq state --to en-analisis
@@ -118,7 +118,7 @@ sequenceDiagram
         Arq->>CLI: arq set veredicto=aprobar-con-condiciones · arq state --to en-firma
         CLI->>Git: en-firma · borradores listos
         EM->>CLI: arq jira --apply
-        CLI->>PLATE: la épica muestra el análisis y el veredicto propuesto
+        CLI->>PLATE: épica con análisis y veredicto · tareas de análisis a Done
     end
 
     rect rgba(190, 140, 210, 0.12)
@@ -135,7 +135,7 @@ sequenceDiagram
         EM->>CLI: arq state --to cerrado --resultado condicionado
         CLI->>Git: estado cerrado
         EM->>CLI: arq jira --apply
-        CLI->>PLATE: PLATE-614 queda con el veredicto final
+        CLI->>PLATE: PLATE-614 con el veredicto final · todo en Done
     end
 
     Note over CLI,PEHD: arq ver PRY muestra en cualquier momento el ticket y el árbol con su estado

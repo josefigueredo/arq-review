@@ -117,7 +117,21 @@ def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
         item_key = ensure(item, issue_types[item["type"]], epic)
         for sub in item["subtasks"]:
             ensure(sub, issue_types["subtask"], item_key)
-    return {"epica": epic, "created": ensure.created, "reused": ensure.reused, "updated": ensure.updated}
+    return {"epica": epic, "created": ensure.created, "reused": ensure.reused, "updated": ensure.updated,
+            "nodes": dict(ensure.index.by_node)}
+
+
+def sync_progress(client, label: str, nodes: Dict[str, str], done: set) -> Dict[str, List[str]]:
+    """Move to Done every finished issue that is not there yet; leaves first, the epic last. Never moves back."""
+    category = {issue["key"]: issue.get("category") for issue in client.search_board(label)}
+    moved: List[str] = []
+    blocked: List[str] = []
+    for node in sorted(done, key=lambda n: (n == "epica", -n.count("/"))):
+        key = nodes.get(node)
+        if not key or category.get(key) == "done":
+            continue
+        (moved if client.transition_done(key) else blocked).append(key)
+    return {"moved": moved, "blocked": blocked}
 
 
 def sync_epic(client, key: str, epic: dict) -> None:

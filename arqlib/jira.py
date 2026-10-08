@@ -65,6 +65,19 @@ class Jira:
                 return found
             body = dict(body, nextPageToken=token)
 
+    def transition_done(self, key: str) -> Optional[str]:
+        """Move the issue to a status of the "done" category; None when its workflow offers none from here."""
+        check_key(key)
+        transitions = self._send("GET", f"/rest/api/2/issue/{key}/transitions").get("transitions", [])
+        done = [t for t in transitions if ((t.get("to") or {}).get("statusCategory") or {}).get("key") == "done"]
+        if not done:
+            return None
+        pick = next((t for t in done if re.search(r"done|hecho|finaliz|complet|resuel", t["to"].get("name", ""), re.I)),
+                    done[0])
+        self._send("POST", f"/rest/api/2/issue/{key}/transitions", {"transition": {"id": pick["id"]}})
+        self._journal({"action": "transition", "key": key, "to": pick["to"].get("name")})
+        return pick["to"].get("name")
+
     def update_description(self, key: str, text: str) -> None:
         check_key(key)
         self._send("PUT", f"/rest/api/2/issue/{key}", {"fields": {"description": text}})

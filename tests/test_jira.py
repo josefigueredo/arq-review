@@ -168,6 +168,20 @@ class JiraTest(unittest.TestCase):
                                            {"fields": {"description": "h3. Hola"}}))
         self.assertEqual(log[0], {"action": "description", "key": "PLATE-627", "chars": 8})
 
+    def test_transition_done_picks_the_done_category(self):
+        opener, log = FakeOpener({"transitions": [
+            {"id": "11", "name": "PROCESANDO", "to": {"name": "PROCESANDO", "statusCategory": {"key": "indeterminate"}}},
+            {"id": "31", "name": "Done", "to": {"name": "Done", "statusCategory": {"key": "done"}}}]}, None), []
+        self.assertEqual(client(opener, log).transition_done("PLATE-616"), "Done")
+        self.assertEqual(opener.calls[1], ("POST", "https://x.atlassian.net/rest/api/2/issue/PLATE-616/transitions",
+                                           {"transition": {"id": "31"}}))
+        self.assertEqual(log[0], {"action": "transition", "key": "PLATE-616", "to": "Done"})
+
+    def test_transition_done_without_a_done_transition(self):
+        opener = FakeOpener({"transitions": [{"id": "1", "name": "x", "to": {"name": "x",
+                                                                            "statusCategory": {"key": "new"}}}]})
+        self.assertIsNone(client(opener).transition_done("PLATE-616"))
+
     def test_get_brief(self):
         opener = FakeOpener({"key": "ARQ-2", "fields": {"summary": "s", "parent": {"key": "ARQ-1"}}})
         self.assertEqual(client(opener).get_brief("ARQ-2"), {"key": "ARQ-2", "summary": "s", "parent": "ARQ-1"})

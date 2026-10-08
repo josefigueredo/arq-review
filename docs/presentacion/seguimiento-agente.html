@@ -219,7 +219,7 @@ const SLIDES = [
     agente: "El mensaje pasó las guardas: sigue la plantilla, nombra su pedido y el estado es el correcto. Publicalo y sincronizá la épica.",
     cmds: [["agente", "arq jsm PRY-2026-0028 --file reviews/PRY-2026-0028.jsm.md --public --template jsm-pedido-info.md   (vista previa)"],
            ["you", "arq jsm PRY-2026-0028 --file reviews/PRY-2026-0028.jsm.md --public --template jsm-pedido-info.md --apply"],
-           ["you", "arq jira PRY-2026-0028 --apply   (la épica muestra lo encontrado)"]],
+           ["you", "arq jira PRY-2026-0028 --apply   (la épica muestra lo encontrado y las tareas cumplidas pasan a Done)"]],
     on: ["vos", "agente", "arq", "pehd", "plate"],
     steps: [{ from: "vos", to: "arq", text: "--apply" }, { from: "arq", to: "pehd", text: "11 preguntas" }, { from: "arq", to: "plate", text: "Resumen actualizado" }] },
   { phase: "En cualquier momento", status: "ahora", title: "¿Cómo va? Un solo comando",
@@ -265,7 +265,7 @@ const SLIDES = [
     on: ["agente", "pry"],
     steps: [{ from: "pry", to: "agente", text: "Pedido y documentos", back: true }] },
   { phase: "Reglas de oro", title: "Cinco cosas para no equivocarse",
-    body: "<ul><li><b>Lo que escribe en Jira lo corrés vos</b>, en tu terminal (en Claude Code, con <b>!</b>). El agente nunca hace <i>--apply</i>.</li><li><b>Después de cada paso, commit</b> en el repo de reviews: git es la fuente de verdad.</li><li><b>No edites descripciones en Jira</b>: se regeneran. Las notas van en comentarios.</li><li><b>Renombrar o asignar tareas es seguro</b>: arq las reconoce por su ID, no por el texto.</li><li><b>Repetir un comando no duplica nada</b>: si algo falló, volvé a correrlo.</li></ul>",
+    body: "<ul><li><b>Lo que escribe en Jira lo corrés vos</b>, en tu terminal (en Claude Code, con <b>!</b>). El agente nunca hace <i>--apply</i>.</li><li><b>Después de cada paso, commit</b> en el repo de reviews: git es la fuente de verdad.</li><li><b>No edites descripciones en Jira</b>: se regeneran. Las notas van en comentarios.</li><li><b>Renombrar o asignar tareas es seguro</b>: arq las reconoce por su ID, no por el texto.</li><li><b>Repetir un comando no duplica nada</b>: si algo falló, volvé a correrlo. Y cada vez deja en Done las tareas que ya se cumplieron.</li></ul>",
     on: ACTORS.map(a => a.id), steps: [] },
 ];
 

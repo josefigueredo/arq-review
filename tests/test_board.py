@@ -41,8 +41,8 @@ class BoardTest(unittest.TestCase):
         epic = next(i for i, line in enumerate(lines) if "PLATE-614" in line)
         tree = lines[epic:epic + 7]
         self.assertIn("○ PLATE-614", tree[0])
-        self.assertTrue(tree[1].lstrip().startswith("├─ ● PLATE-615"), tree[1])  # ordenado por número
-        self.assertIn("│  ├─ ● PLATE-616", tree[2])
+        self.assertTrue(tree[1].lstrip().startswith("├─ ✔ PLATE-615"), tree[1])  # ordenado por número
+        self.assertIn("│  ├─ ✔ PLATE-616", tree[2])
         self.assertIn("Jose Figueredo", tree[2])
         self.assertIn("│  └─ ○ PLATE-626", tree[3])
         self.assertTrue(tree[4].lstrip().startswith("└─ ○ PLATE-619"), tree[4])
