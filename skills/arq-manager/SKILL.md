@@ -1,12 +1,16 @@
 ---
 name: arq-manager
-description: Use when a PRY-YYYY-NNNN project request arrives for Architecture validation and someone has to register it, triage it, open its Jira epic and JSM ticket, watch its deadline, or publish the signed decision. Coordination only; technical judgment belongs to arq-architect.
+description: Use when a PRY-YYYY-NNNN project request arrives for Architecture validation and someone has to register it, triage it, open its Jira epic and the requester's ticket, watch its deadline, or publish the signed decision. Coordination only; technical judgment belongs to arq-architect.
 ---
 
 # arq-manager
 
-Coordina la revisión de Arquitectura de un pedido PRY: registro, triage, Jira y JSM, plazo y publicación. **No emite
+Coordina la revisión de Arquitectura de un pedido PRY: registro, triage, Jira, plazo y publicación. **No emite
 juicio técnico**: eso es de `arq-architect`. Todo pasa por el CLI `arq`, parado en el repo de reviews del equipo.
+
+Los comandos con `--apply` necesitan `JIRA_BASE_URL`, `JIRA_EMAIL` y `JIRA_API_TOKEN` en el entorno. Si están en un
+`.env`, el comando que se le da al usuario los carga en la misma línea:
+`! set -a && source <ruta>/.env && set +a && arq jira PRY-AAAA-NNNN --apply`.
 
 ## Antes de empezar
 
@@ -40,7 +44,7 @@ pedido que lo justifica, y **pedirle confirmación al usuario**: contesta la per
 duda, "sí". Con las respuestas confirmadas: `arq triage PRY-AAAA-NNNN --answers "<id>=si|no,..."`. Si hubo un error,
 se puede repetir mientras no exista la épica.
 
-## 3. Jira y JSM
+## 3. Jira y ticket del requirente
 
 1. `arq jira PRY-AAAA-NNNN --html <scratchpad>/PRY-AAAA-NNNN.html`: mostrar el árbol y abrir el HTML. En nivel
    `complejo`, preguntar si hace falta la historia opcional de validación técnica (`--con-validacion`).
@@ -52,11 +56,15 @@ se puede repetir mientras no exista la épica.
    contacto se busca en Jira por email. Si el CLI dice que no encontró a alguien, hay que darlo de alta y repetir el
    mismo comando; si dice que Jira rechazó el reporter, hay que darle a la cuenta el permiso "Modify reporter".
 5. Ante cualquier falla, el mismo `! arq jira PRY-AAAA-NNNN --apply` reanuda sin duplicar.
+6. Después del `--apply`, verificar en la salida `creados N, existentes M` y el ticket del requirente. Renombrar un
+   issue a mano en Jira es seguro: `arq` lo reconoce por su ID estable (`arq.node`), no por el texto.
 
 ## 4. Plazo y pedido de información
 
 `arq timebox PRY-AAAA-NNNN` fija el vencimiento la primera vez y después lo consulta. Si dice `vencido` estando en
-`esperando-info`, ir al paso 7.
+`esperando-info`, ir al paso 7. Si la **fecha comprometida** del pedido es anterior al vencimiento, avisarle al usuario:
+la revisión está en el camino crítico, y conviene publicar el pedido de información el mismo día y hacer seguimiento
+antes de esa fecha.
 
 Cuando el architect deja `reviews/PRY-AAAA-NNNN.jsm.md` con el estado en `esperando-info`, mostrarlo en dry run con
 `arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --template jsm-pedido-info.md` y, con el ok, darle
@@ -100,3 +108,5 @@ plataforma con el motivo y el link al JSM, y se cierra con `arq state PRY-AAAA-N
 - Nunca `--apply` por cuenta propia: siempre se lo da al usuario con `!`.
 - Lo público sale de las plantillas `jsm-*.md` del contrato; el CLI rechaza lo que no las sigue.
 - Labels y tareas hablan del trabajo, nunca de la seniority de las personas.
+- Después de cada paso que cambia el review o escribe en Jira, commitear el repo de reviews (review, borradores y
+  `.arq/jira-writes.jsonl`): git es la fuente de verdad.

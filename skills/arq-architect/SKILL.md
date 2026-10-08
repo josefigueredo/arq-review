@@ -14,7 +14,12 @@ equipo). No crea tickets, no maneja plazos y no publica: eso es de `arq-manager`
    Otro estado → decirlo y no avanzar.
 2. Leer el contrato en la carpeta que imprime `arq path`: `constraints.md`, `minimum-input.md` y
    `templates/analisis.md`. `arq lint` tiene que dar ok.
-3. Leer el pedido y todos los links de documentación accesibles. Lo que no se pueda abrir se lista como `[verificar]`.
+3. Leer el pedido y todos los links de documentación accesibles. Lo que no se pueda abrir se lista como `[verificar]`
+   y se le pide al requirente que lo comparta.
+4. **Verificar que la documentación esté vigente.** Comparar la fecha del documento adjunto con la del código del
+   repo (`git log -1 -- <archivo>`, ramas recientes de `origin`, versiones Mermaid sincronizadas). Si hay una versión
+   más nueva, se usa esa y se avisa en el pedido de información. En "Lo que entendimos" se deja escrito qué se revisó:
+   repo, rama, commit y fecha. Lo que diga el código vence a lo que diga un diagrama.
 
 ## 1. Gap check
 
@@ -28,7 +33,9 @@ test: cada afirmación tiene que apuntar a un número, componente, diagrama o m�
   `arq set PRY-AAAA-NNNN componente_debil=<c> senales=<s>`. Redactar `reviews/PRY-AAAA-NNNN.jsm.md` desde
   `templates/jsm-pedido-info.md`, completando solo los placeholders y sin tocar el texto fijo (el CLI rechaza lo que
   no sigue la plantilla): por cada faltante, una pregunta **concreta para este pedido** (nunca genérica) y por qué se
-  pide. Avisar que le toca a `arq-manager` publicarlo.
+  pide. `{{vence}}` es el campo `vence` de `arq show`; si está vacío, pedirle a `arq-manager` que arranque el plazo.
+  Si la fecha comprometida del pedido es anterior a `vence`, ordenar las preguntas: primero las que bloquean esa
+  fecha. Avisar que le toca a `arq-manager` publicarlo.
 - **Input completo** → `arq state PRY-AAAA-NNNN --to en-analisis` y seguir.
 
 ## 2. Método
@@ -67,7 +74,9 @@ test: cada afirmación tiene que apuntar a un número, componente, diagrama o m�
 
 - Nunca un veredicto sobre Cloud, Seguridad o FinOps: solo señales.
 - Nunca reescribir todo el pedido cuando el original es viable: mejorar el componente más débil.
-- Lo que lee el requirente va en tono profesional y con recomendaciones; el debate técnico crudo va como nota interna
-  (`arq jsm ... --internal`, lo publica `arq-manager`).
+- Lo que lee el requirente va en tono profesional y con recomendaciones. El debate técnico crudo va como nota interna
+  (`arq jsm ... --internal`, lo publica `arq-manager`) en el canal `jsm`; en el canal `software` no hay notas internas
+  (todo comentario lo ve el requirente) y el debate va en la épica.
 - Para tunear: `arq eval tests/golden/<PRY> reviews/<PRY>.md` contra los golden cases del repo `arq-review`. Cada
-  revisión real que salga mal se convierte en un golden case nuevo.
+  revisión real que salga mal se convierte en un golden case nuevo. Un golden se corrige solo si cambia la evidencia,
+  nunca para que pase la salida.

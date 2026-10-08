@@ -1,5 +1,9 @@
 # arq-review Implementation Plan
 
+> **Documento histórico.** Es el plan con el que se implementó el MVP (2026-10-07). Lo vigente está en el spec
+> (`docs/superpowers/specs/2026-10-07-arq-review-design.md`), en el README y en el código; cambios posteriores (canal
+> `software`, identidad estable `arq.node`, criterios de triage) no se reflejan acá.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Construir `arq-review`: un CLI `arq` (stdlib) + contrato + dos skills (`arq-manager`, `arq-architect`) que llevan

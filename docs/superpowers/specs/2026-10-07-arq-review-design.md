@@ -39,7 +39,7 @@ versionado en git. Ninguna decisión depende de chats por fuera del registro, y 
 | D9 | Cliente propio de Jira y JSM, **solo stdlib**, inspirado en los patrones de `jira-kanban` (dry run, preview HTML, `--apply` ejecutado por el usuario, journal, reanudar sin duplicar). Sin depender de que `jk` esté instalado. | `jk` no cubre JSM, links, comentarios ni búsqueda por label, y vive en una sola máquina. |
 | D10 | Dos skills de rol (`arq-manager`, `arq-architect`) sobre un **contrato compartido** y scripts determinísticos. Ninguna skill invoca a la otra; el estado vive en el archivo del review. | Separar el juicio técnico de la orquestación sin duplicar reglas. |
 | D11 | La herramienta (`arq-review`) y los datos (repo de reviews del equipo) son repos separados. | Que cada revisión no ensucie el historial de la herramienta, y que la herramienta sirva a más de un equipo. |
-| D12 | El pedido JSM se crea **a nombre del requirente** (`raiseOnBehalfOf`), buscado en Jira por el email que trae la plataforma, con el head como participante. Si no existe en Jira, o si Jira oculta su email y no se puede confirmar la identidad, no se crea nada. | Si lo crea el usuario de la API, el requirente nunca recibe notificaciones y D5 no sirve. Nunca se crea un ticket a nombre de otra persona. |
+| D12 | El ticket del requirente (pedido JSM o issue del help desk, según D14) se crea **a nombre del requirente** (`raiseOnBehalfOf`), buscado en Jira por el email que trae la plataforma, con el head como participante. Si no existe en Jira, o si Jira oculta su email y no se puede confirmar la identidad, no se crea nada. | Si lo crea el usuario de la API, el requirente nunca recibe notificaciones y D5 no sirve. Nunca se crea un ticket a nombre de otra persona. |
 | D14 | El canal del requirente es configurable (`canal_requirente`): `jsm` (pedido de Service Management, `raiseOnBehalfOf`, participantes, notas internas) o `software` (issue en un proyecto de Software usado como help desk, hoy PEHD con tipo `Tarea`: el requirente es el *reporter*, el head es *watcher*, todo comentario es público y no hay notas internas; el debate técnico va en la épica). Si Jira rechaza el reporter, no se crea nada. | ACME no tiene un JSM de Arquitectura; los requirentes tienen licencia de Jira y ya trabajan con PEHD. El análisis y las guardas no cambian: solo el adaptador hacia Jira. |
 | D13 | Lo público tiene doble guarda: el texto tiene que seguir una plantilla `jsm-*.md` y el pedido tiene que estar en el estado de esa plantilla. | Que nunca salga una devolución antes de la firma ni un texto libre al requirente. |
 
@@ -47,8 +47,10 @@ versionado en git. Ninguna decisión depende de chats por fuera del registro, y 
 
 - **S1.** Un rechazo en la plataforma es **terminal** (no se puede reabrir el mismo PRY). Se diseña para el peor caso.
   Si resulta falso, el diseño sigue sirviendo y solo gana flexibilidad.
-- **S2.** Hay un proyecto JSM disponible y los requirentes pueden usar su portal.
-- **S3.** La instancia de Jira usa la jerarquía estándar: Épica → Story/Task → Sub-task.
+- **S2.** ~~Hay un proyecto JSM disponible y los requirentes pueden usar su portal.~~ **Falso** (2026-10-07): el sitio
+  `example.atlassian.net` no tiene un JSM de Arquitectura. Resuelto con D14: canal `software` sobre PEHD.
+- **S3.** ~~La instancia de Jira usa la jerarquía estándar.~~ **Verificado** (2026-10-07): PLATE usa Epic →
+  Story (migrated) / Tarea → Subtarea, y `parent` funciona en los tres niveles.
 
 ## 4. Layout
 
@@ -232,15 +234,15 @@ Reglas del cliente (`arqlib/jira.py` cubre Jira y JSM):
 - **JSM:** `arq jsm --public` (Reply to customer) y `arq jsm --internal` (nota interna) son canales distintos. El
   público exige `--template` con una plantilla `jsm-*.md`, que el texto la siga y que el pedido esté en el estado de esa
   plantilla.
-- **Supuesto a verificar en la primera corrida real:** repetir `add` de labels, participantes y un link idéntico no
-  duplica nada en Jira.
+- **Verificado en la primera corrida real** (PEHD-86, 2026-10-08): repetir `add` de labels, watchers y un link
+  idéntico no duplica nada en Jira.
 - **Product Brain:** la épica ARQ es de *revisión*. Si el pedido escala a RFC, la épica de *delivery* la crea el flujo
   de Product Brain, y las dos se linkean sin fusionarse.
 
 ## 9. Publicación
 
 1. `reviews/PRY-XXXX.md` en git.
-2. Respuesta pública en JSM.
+2. Respuesta pública en el ticket del requirente (JSM o help desk).
 3. Comentario corto para pegar en la plataforma (el click lo hace un humano).
 4. Copia en Confluence, o RFC en Product Brain según `escalar-rfc.md`, con el banner "generado desde git, no editar
    acá". La publicación en Confluence queda fuera del MVP (ver sección 12).
@@ -270,9 +272,21 @@ tiene acceso. Devuelve el mismo pedido normalizado que el intake manual. Sin end
 - Métricas y dashboard de SLA más allá de los nativos de JSM.
 - Cualquier acción de aprobar o rechazar en la plataforma.
 
-## 13. Pendientes que define el usuario
+## 13. Definiciones del usuario (resueltas)
 
-- Contenido inicial de `constraints.md`.
-- Claves de los proyectos de Jira Software y JSM, y el request type de JSM.
-- Confirmar el timebox de 10 días hábiles y el umbral de 3 meses.
-- Ubicación del repo de reviews del equipo.
+- `constraints.md`: 21 reglas aprobadas, con la excepción de Bedrock en C-PLAT-01 (2026-10-07).
+- Jira: épicas en **PLATE**; canal del requirente `software` sobre **PEHD**, tipo `Tarea`; link `Relates`.
+- Timebox de 10 días hábiles y umbral de 3 meses: en uso desde la primera corrida, sin cambios pedidos.
+- Repo de reviews del equipo: `~/CurrentCode/SPECKIT/arq-reviews`.
+- Criterio de "cross" para el triage: consumible desde otras cuentas AWS, empresas o verticales cuenta como "sí".
+
+## 14. Lecciones de la primera corrida
+
+- **Identidad estable.** Reconocer los issues por su texto duplicaba issues al renombrarlos; ahora se usa `arq.node`.
+  Cambiar el ID de un nodo en `structure.py` equivale a crear issues nuevos en todos los pedidos abiertos.
+- **Documentación vigente.** El diagrama adjunto a PRY-2026-0026 era de mayo, y había uno sincronizado con el código
+  del día anterior en otra rama. El architect verifica contra el código la fecha de la documentación que lee.
+- **Plazo vs. fecha comprometida.** Si la fecha comprometida del pedido es anterior al vencimiento del plazo, la
+  revisión está en el camino crítico: el pedido de información prioriza lo que bloquea esa fecha.
+- **Goldens.** Se corrigen solo cuando cambia la evidencia (triage real, documentación vigente), nunca para que pase
+  una salida del architect.
