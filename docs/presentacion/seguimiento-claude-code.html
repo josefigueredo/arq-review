@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revisión desde Claude Code</title>
+<meta name="description" content="Cómo se sigue un pedido de Arquitectura desde Claude Code con las skills arq-manager y arq-architect, paso a paso.">
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #1d2330; --muted: #5c6577; --line: #d9dee7;
+    --accent: #2f6fde; --accent-soft: #e6eefc; --ok: #1f8a5b; --warn: #b7791f; --phase: #6b4fbb;
+    --actor-off: #eef0f4; --actor-on: #ffffff; --shadow: 0 6px 24px rgba(20, 30, 60, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --surface: #1a1f28; --text: #e7eaf0; --muted: #9aa3b5; --line: #2c3442;
+      --accent: #6aa0ff; --accent-soft: #1f2d48; --ok: #4cc38a; --warn: #e3a63c; --phase: #a78bfa;
+      --actor-off: #202734; --actor-on: #263043; --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151b; --surface: #1a1f28; --text: #e7eaf0; --muted: #9aa3b5; --line: #2c3442;
+    --accent: #6aa0ff; --accent-soft: #1f2d48; --ok: #4cc38a; --warn: #e3a63c; --phase: #a78bfa;
+    --actor-off: #202734; --actor-on: #263043; --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; gap: 12px; }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; color: var(--muted); letter-spacing: .02em; }
+  .theme { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 6px 10px;
+           cursor: pointer; font: inherit; font-size: 13px; }
+
+  main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 0 16px 16px; }
+  .deck { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Stage: the cast of the process, with a message travelling between them */
+  .stage { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+           box-shadow: var(--shadow); padding: 18px 12px 56px; overflow-x: auto; overflow-y: hidden; }
+  .cast { display: grid; grid-template-columns: repeat(7, minmax(96px, 1fr)); gap: 10px; min-width: 720px; position: relative; }
+  .actor { background: var(--actor-off); border: 2px solid transparent; border-radius: 12px; padding: 10px 8px;
+           text-align: center; opacity: .45; transition: all .35s ease; }
+  .actor.on { opacity: 1; background: var(--actor-on); border-color: var(--accent); transform: translateY(-3px); }
+  .actor svg { width: 30px; height: 30px; display: block; margin: 0 auto 6px; color: var(--accent); }
+  .actor b { display: block; font-size: 13px; line-height: 1.25; }
+  .actor .short { display: none; }
+  .actor small { display: block; font-size: 11px; color: var(--muted); line-height: 1.25; margin-top: 2px; }
+  .msg { position: absolute; top: 0; left: 0; max-width: 220px; background: var(--accent); color: #fff;
+         font-size: 12.5px; line-height: 1.3; padding: 6px 10px; border-radius: 999px; white-space: nowrap;
+         overflow: hidden; text-overflow: ellipsis; box-shadow: var(--shadow); opacity: 0; pointer-events: none;
+         transition: transform 1.1s cubic-bezier(.45, .05, .25, 1), opacity .3s ease; z-index: 2; }
+  .msg.show { opacity: 1; }
+  .msg.back { background: var(--ok); }
+
+  /* Slide */
+  .slide { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+           padding: 28px 32px; min-height: 280px; display: flex; flex-direction: column; gap: 10px; }
+  .phase { display: inline-block; align-self: flex-start; font-size: 12px; font-weight: 700; letter-spacing: .08em;
+           text-transform: uppercase; color: var(--phase); background: var(--accent-soft); padding: 4px 10px;
+           border-radius: 999px; }
+  .slide h2 { font-size: clamp(22px, 3.2vw, 32px); line-height: 1.2; margin: 4px 0 2px; }
+  .slide p { font-size: clamp(16px, 1.9vw, 19px); margin: 0; color: var(--text); max-width: 62ch; }
+  .slide ul { margin: 4px 0 0; padding-left: 1.2em; font-size: clamp(15px, 1.8vw, 18px); max-width: 66ch; }
+  .slide li { margin: 4px 0; }
+  .example { margin-top: 6px; background: var(--accent-soft); border-radius: 12px; padding: 12px 14px;
+             font-size: clamp(14px, 1.7vw, 16px); max-width: 70ch; }
+  .example b.lbl { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent);
+                   margin-bottom: 2px; }
+  .chip { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 2px 9px;
+          margin-left: 8px; vertical-align: middle; color: #fff; }
+  .chip.hecho { background: var(--ok); } .chip.ahora { background: var(--warn); } .chip.proximo { background: var(--muted); }
+  .chat { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; max-width: 74ch; }
+  .bubble { border-radius: 12px; padding: 8px 12px; font-size: clamp(14px, 1.7vw, 16px); line-height: 1.4; }
+  .bubble.you { align-self: flex-start; background: var(--accent-soft); }
+  .bubble.claude { align-self: flex-end; background: var(--actor-off); border: 1px solid var(--line); }
+  .bubble b.who { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .cmds { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; max-width: 100%; }
+  .cmd { display: flex; align-items: baseline; gap: 10px; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+         background: #0f1520; color: #d7e3f4; border-radius: 10px; padding: 8px 12px; overflow-x: auto; white-space: nowrap; }
+  .cmd .who { font: 600 10.5px/1 system-ui, sans-serif; letter-spacing: .05em; text-transform: uppercase; padding: 3px 7px;
+              border-radius: 999px; flex: none; }
+  .cmd .who.claude { background: #2f6fde; color: #fff; } .cmd .who.you { background: #b7791f; color: #fff; }
+  .chip.futuro { background: var(--phase); }
+  .note { margin-top: auto; font-size: 14px; color: var(--muted); border-left: 3px solid var(--warn); padding: 4px 0 4px 10px; }
+  .fade { animation: fade .45s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Controls */
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .controls button { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+                     padding: 9px 14px; font: inherit; font-size: 15px; cursor: pointer; min-width: 44px; }
+  .controls button.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 120px; }
+  .controls button:disabled { opacity: .4; cursor: default; }
+  .count { font-size: 14px; color: var(--muted); min-width: 64px; text-align: center; }
+  .bar { height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--accent); }
+  .dots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .dots button { width: 12px; height: 12px; border-radius: 50%; border: none; padding: 0; background: var(--line); cursor: pointer; }
+  .dots button.on { background: var(--accent); }
+  .hint { text-align: center; font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 640px) {
+    header { padding: 12px 16px; }
+    .slide { padding: 20px 18px; min-height: 0; }
+    /* Compact cast: every actor fits, so the travelling message is always in view */
+    .stage { padding: 12px 6px 46px; overflow: hidden; }
+    .cast { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; min-width: 0; }
+    .actor { padding: 8px 2px; border-radius: 10px; }
+    .actor svg { width: 22px; height: 22px; margin-bottom: 4px; }
+    .actor b { font-size: 10.5px; }
+    .actor .long, .actor small { display: none; }
+    .actor .short { display: inline; }
+    .msg { font-size: 11px; max-width: 150px; padding: 4px 8px; }
+    .cmd { white-space: normal; flex-wrap: wrap; row-gap: 6px; overflow-wrap: anywhere; font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .msg, .actor, .fade { transition: none; animation: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Revisión de Arquitectura desde Claude Code · el caso de los modelos de IA locales</h1>
+  <button class="theme" id="theme" type="button" aria-label="Cambiar tema claro u oscuro">Tema</button>
+</header>
+<main>
+  <div class="deck">
+    <section class="stage" aria-label="Quiénes participan">
+      <div class="cast" id="cast"></div>
+      <div class="msg" id="msg" aria-hidden="true"></div>
+    </section>
+
+    <article class="slide" id="slide" aria-live="polite"></article>
+
+    <div class="bar" aria-hidden="true"><span id="bar"></span></div>
+    <div class="controls">
+      <button id="prev" type="button">◀ Anterior</button>
+      <button id="play" type="button" class="primary">▶ Reproducir</button>
+      <button id="next" type="button">Siguiente ▶</button>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="dots" id="dots" aria-label="Ir a una diapositiva"></div>
+    <div class="hint">Teclado: ← → para moverte · espacio para reproducir o pausar</div>
+  </div>
+</main>
+
+<script>
+const ICON = {
+  person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
+  inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/></svg>',
+  team: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M2 20c0-3 2.7-5 6-5s6 2 6 5M12 20c0-3 2.2-5 5-5s5 2 5 5"/></svg>',
+  lens: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>',
+  pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l4-1L20 7l-3-3L5 16z"/><path d="M14 6l3 3"/></svg>',
+  board: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  bot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01M9 16h6"/></svg>',
+  term: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg>',
+  git: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7.2l7.5 3.6"/></svg>',
+};
+
+const ACTORS = [
+  { id: "vos", name: "Vos", short: "Vos", sub: "quien coordina o revisa", icon: "person" },
+  { id: "claude", name: "Claude Code", short: "Claude", sub: "con las skills arq-*", icon: "bot" },
+  { id: "arq", name: "arq", short: "arq", sub: "la herramienta", icon: "term" },
+  { id: "git", name: "Repo de reviews", short: "Repo", sub: "el análisis y su historia", icon: "git" },
+  { id: "plate", name: "Jira PLATE", short: "PLATE", sub: "el tablero del equipo", icon: "board" },
+  { id: "pehd", name: "Jira PEHD", short: "PEHD", sub: "el ticket del pedido", icon: "chat" },
+  { id: "pry", name: "Plataforma PRY", short: "PRY", sub: "donde se cargó el pedido", icon: "inbox" },
+];
+
+// you: what you say · claude: what Claude answers · cmds: [who, command] ("claude" runs it, "you" runs it with !)
+const SLIDES = [
+  { phase: "Introducción", title: "El mismo pedido, ahora desde Claude Code",
+    body: "<p>Seguimos <b>PRY-2026-0028</b> (la prueba de modelos de IA locales) desde adentro: qué le decís a Claude, qué hace cada skill y qué comandos corren.</p>",
+    ex: "Dos skills se reparten el trabajo: <b>arq-manager</b> coordina y <b>arq-architect</b> analiza. Las dos usan la herramienta <b>arq</b>.",
+    on: [], steps: [] },
+  { phase: "Antes de empezar", title: "Qué tiene que estar listo",
+    body: "<ul><li>Claude Code abierto en el <b>repo de reviews</b> (<code>~/CurrentCode/SPECKIT/arq-reviews</code>).</li><li>Las skills instaladas y <code>arq</code> en el PATH (lo deja <code>install.sh</code>).</li><li>Las credenciales de Jira, que se cargan en la misma línea de cada comando que escribe.</li></ul>",
+    note: "Regla de oro: lo que escribe en Jira lo corrés vos con <b>!</b>. Claude prepara, muestra la vista previa y te pasa el comando.",
+    on: ["vos", "claude", "arq", "git"], steps: [] },
+  { phase: "Quién hace qué", title: "Dos skills, dos sombreros",
+    body: "<ul><li><b>arq-manager</b>: registra, tría, abre el tablero y el ticket, controla el plazo y publica.</li><li><b>arq-architect</b>: revisa el input mínimo, analiza contra las reglas, propone opciones y un veredicto.</li></ul><p>Ninguna llama a la otra: cada una lee en qué estado está el pedido y sabe qué le toca.</p>",
+    on: ["claude", "arq", "git"], steps: [] },
+  { phase: "1 · Registrar", status: "hecho", title: "Le contás a Claude que llegó un pedido",
+    you: "Llegó PRY-2026-0028, te pego el screenshot de la plataforma.",
+    claude: "Lo transcribo textual (es evidencia) y lo registro con Juan Pablo como contacto y Felipe como head.",
+    cmds: [["claude", 'arq new PRY-2026-0028 --nombre "PoC modelos IA Locales" --pedido pedido.md --contacto requester@example.com --head reviewer@example.com']],
+    on: ["vos", "claude", "arq", "git"],
+    steps: [{ from: "vos", to: "claude", text: "Screenshot del pedido" }, { from: "claude", to: "arq", text: "arq new" }, { from: "arq", to: "git", text: "Review en estado recibido" }] },
+  { phase: "2 · Triage", status: "hecho", title: "Claude propone, vos confirmás",
+    claudeFirst: true,
+    claude: "Propongo las 6 respuestas citando el pedido. Dos son “sí”: es cross (lo usarían otras cuentas) y no dice cuánto dura. ¿Confirmás?",
+    you: "Sí. Cross significa que lo pueden consumir otras cuentas, empresas o verticales.",
+    cmds: [["claude", 'arq triage PRY-2026-0028 --answers "multi_cuenta=si,...,larga_o_productiva=si"  →  nivel: complejo']],
+    on: ["vos", "claude", "arq", "git"],
+    steps: [{ from: "claude", to: "vos", text: "6 respuestas propuestas", back: true }, { from: "vos", to: "claude", text: "Confirmado" }, { from: "claude", to: "arq", text: "arq triage" }] },
+  { phase: "3 · Jira", status: "hecho", title: "Vista previa primero, después lo creás vos",
+    claude: "Te abro la vista previa: épica con 3 historias y 8 tareas, y el ticket a nombre de Juan Pablo. Para crearlo, corré este comando.",
+    cmds: [["claude", "arq jira PRY-2026-0028 --html vista.html   (vista previa, no escribe nada)"],
+           ["you", "! arq jira PRY-2026-0028 --apply   →  PLATE-614 · PEHD-86"]],
+    on: ["vos", "claude", "arq", "plate", "pehd"],
+    steps: [{ from: "claude", to: "vos", text: "Vista previa", back: true }, { from: "vos", to: "arq", text: "! --apply" }, { from: "arq", to: "plate", text: "PLATE-614 y tareas" }, { from: "arq", to: "pehd", text: "PEHD-86 para Juan Pablo" }] },
+  { phase: "3 · Jira", status: "hecho", title: "Arranca el plazo",
+    claude: "Plazo fijado: vence el 21 de octubre (10 días hábiles).",
+    cmds: [["claude", "arq timebox PRY-2026-0028  →  vence: 2026-10-21 (en plazo)"]],
+    on: ["claude", "arq", "git"],
+    steps: [{ from: "claude", to: "arq", text: "arq timebox" }, { from: "arq", to: "git", text: "vence 21/10" }] },
+  { phase: "4 · Gap check", status: "hecho", title: "arq-architect revisa si alcanza la información",
+    claude: "Leí el pedido y la documentación vigente. Faltan 10 de 13 datos. Te dejo el análisis preliminar y 11 preguntas concretas para Juan Pablo.",
+    cmds: [["claude", "arq set PRY-2026-0028 faltantes=hipotesis_medible,... componente_debil=costo senales=finops,cloud"],
+           ["claude", "arq state PRY-2026-0028 --to esperando-info"]],
+    on: ["claude", "arq", "git"],
+    steps: [{ from: "claude", to: "arq", text: "Faltantes y análisis" }, { from: "arq", to: "git", text: "esperando-info" }] },
+  { phase: "4 · Gap check", status: "hecho", title: "Las preguntas salen al ticket de Juan Pablo",
+    claude: "El mensaje pasó las guardas: sigue la plantilla, nombra su pedido y el estado es el correcto. Publicalo y sincronizá la épica.",
+    cmds: [["claude", "arq jsm PRY-2026-0028 --file reviews/PRY-2026-0028.jsm.md --public --template jsm-pedido-info.md   (vista previa)"],
+           ["you", "! arq jsm PRY-2026-0028 --file reviews/PRY-2026-0028.jsm.md --public --template jsm-pedido-info.md --apply"],
+           ["you", "! arq jira PRY-2026-0028 --apply   (la épica muestra lo encontrado)"]],
+    on: ["vos", "claude", "arq", "pehd", "plate"],
+    steps: [{ from: "vos", to: "arq", text: "! --apply" }, { from: "arq", to: "pehd", text: "11 preguntas" }, { from: "arq", to: "plate", text: "Resumen actualizado" }] },
+  { phase: "En cualquier momento", status: "ahora", title: "¿Cómo va? Un solo comando",
+    body: "<p>Muestra el ticket y el árbol de la épica con el estado, el responsable y el avance de cada tarea. Es solo lectura. En tu terminal, las claves son links que abren Jira.</p>",
+    cmds: [["you", "arq ver PRY-2026-0028"]],
+    ex: "<b>Estamos acá:</b> PRY-2026-0028 está en <i>esperando-info</i>; vence el 21 de octubre.",
+    on: ["vos", "arq", "plate", "pehd"],
+    steps: [{ from: "vos", to: "arq", text: "arq ver" }, { from: "plate", to: "vos", text: "Árbol y avance", back: true }] },
+  { phase: "5 · Respuesta", status: "proximo", title: "Cuando Juan Pablo responde, se lo contás a Claude",
+    you: "Juan Pablo respondió en PEHD-86.",
+    claude: "Releo la respuesta contra los 13 datos. Si todavía falta algo, armo otra ronda de preguntas; si está completo, paso a análisis.",
+    cmds: [["claude", "arq state PRY-2026-0028 --to en-analisis"]],
+    on: ["vos", "claude", "pehd", "arq", "git"],
+    steps: [{ from: "pehd", to: "vos", text: "Respuesta", back: true }, { from: "vos", to: "claude", text: "Respondió" }, { from: "claude", to: "arq", text: "en-analisis" }] },
+  { phase: "6 · Análisis", status: "proximo", title: "Original + 2 opciones para el punto más débil",
+    claude: "Evalué cada componente contra las reglas. El punto débil es el costo: propongo dos alternativas y un veredicto “aprobar con condiciones”.",
+    cmds: [["claude", "arq set PRY-2026-0028 veredicto=aprobar-con-condiciones"], ["claude", "arq state PRY-2026-0028 --to en-firma"],
+           ["you", "! arq jira PRY-2026-0028 --apply   (la épica muestra el análisis)"]],
+    ex: "Ilustrativo: las alternativas para el costo podrían ser encender el servidor solo en horario laboral, o comparar primero contra un servicio pago por uso.",
+    on: ["claude", "arq", "git", "plate"],
+    steps: [{ from: "claude", to: "git", text: "Análisis y opciones" }, { from: "arq", to: "plate", text: "Veredicto propuesto" }] },
+  { phase: "7 · Firma", status: "proximo", title: "Firmás vos (es complejo)",
+    you: "Revisé el análisis, firmo.",
+    claude: "Registro la firma y lo paso a publicado. Si pedís cambios, vuelve a análisis y la firma se anula.",
+    cmds: [["claude", "arq set PRY-2026-0028 firmante=josefigueredo"], ["claude", "arq state PRY-2026-0028 --to publicado"]],
+    on: ["vos", "claude", "arq", "git"],
+    steps: [{ from: "vos", to: "claude", text: "Firmo" }, { from: "claude", to: "arq", text: "publicado" }] },
+  { phase: "8 · Devolución", status: "proximo", title: "La respuesta llega al ticket, las condiciones al tablero",
+    claude: "Te paso la devolución para Juan Pablo, una tarea por condición y el comentario para pegar en la plataforma.",
+    cmds: [["you", "! arq jsm PRY-2026-0028 --file reviews/PRY-2026-0028.jsm.md --public --template jsm-devolucion.md --apply"],
+           ["you", '! arq seguimiento PRY-2026-0028 "Apagado fuera de horario" --apply']],
+    on: ["vos", "arq", "pehd", "plate"],
+    steps: [{ from: "vos", to: "arq", text: "! --apply" }, { from: "arq", to: "pehd", text: "Devolución" }, { from: "arq", to: "plate", text: "Seguimiento" }] },
+  { phase: "9 · Cierre", status: "proximo", title: "El click en la plataforma es tuyo",
+    you: "Ya aprobé en la plataforma.",
+    claude: "Cierro como condicionado y sincronizo la épica con el veredicto final.",
+    cmds: [["claude", "arq state PRY-2026-0028 --to cerrado --resultado condicionado"], ["you", "! arq jira PRY-2026-0028 --apply"]],
+    on: ["vos", "pry", "claude", "arq", "plate"],
+    steps: [{ from: "vos", to: "pry", text: "Aprobar" }, { from: "claude", to: "arq", text: "cerrado" }, { from: "arq", to: "plate", text: "Veredicto final" }] },
+  { phase: "Fase 2 · MCP", status: "futuro", title: "Con el MCP, Claude lee el pedido solo",
+    body: "<ul><li>Hoy el pedido entra <b>pegando el screenshot</b>.</li><li>Con el MCP de la plataforma, Claude podría leer PRY-2026-0028 directamente y seguir los links de documentación.</li><li>Sería <b>solo lectura</b>: aprobar o rechazar sigue siendo un click humano.</li></ul>",
+    note: "Todavía no existe: está diseñado como fase 2. Nada del resto del flujo cambia.",
+    on: ["claude", "pry"],
+    steps: [{ from: "pry", to: "claude", text: "Pedido y documentos", back: true }] },
+  { phase: "Reglas de oro", title: "Cinco cosas para no equivocarse",
+    body: "<ul><li><b>Lo que escribe en Jira lo corrés vos</b>, con <b>!</b>. Claude nunca hace <i>--apply</i>.</li><li><b>Después de cada paso, commit</b> en el repo de reviews: git es la fuente de verdad.</li><li><b>No edites descripciones en Jira</b>: se regeneran. Las notas van en comentarios.</li><li><b>Renombrar o asignar tareas es seguro</b>: arq las reconoce por su ID, no por el texto.</li><li><b>Repetir un comando no duplica nada</b>: si algo falló, volvé a correrlo.</li></ul>",
+    on: ACTORS.map(a => a.id), steps: [] },
+];
+
+const SLIDE_MS = 9000, STEP_MS = 1800;
+const $ = id => document.getElementById(id);
+const cast = $("cast"), msg = $("msg"), slideEl = $("slide");
+let index = 0, playing = false, timer = null, started = 0, raf = null, stepTimers = [];
+
+cast.innerHTML = ACTORS.map(a =>
+  `<div class="actor" id="a-${a.id}" title="${a.name}: ${a.sub}">${ICON[a.icon]}<b><span class="long">${a.name}</span><span class="short">${a.short}</span></b><small>${a.sub}</small></div>`).join("");
+$("dots").innerHTML = SLIDES.map((_, i) => `<button type="button" aria-label="Diapositiva ${i + 1}"></button>`).join("");
+[...$("dots").children].forEach((dot, i) => dot.addEventListener("click", () => go(i)));
+
+function center(id) {
+  const stage = cast.parentElement.getBoundingClientRect(), box = $("a-" + id).getBoundingClientRect();
+  return { x: box.left - stage.left + cast.parentElement.scrollLeft + box.width / 2, y: box.bottom - stage.top + 4 };
+}
+
+function animate(steps) {
+  stepTimers.forEach(clearTimeout); stepTimers = [];
+  msg.classList.remove("show");
+  steps.forEach((step, n) => {
+    stepTimers.push(setTimeout(() => {
+      const a = center(step.from), b = center(step.to), stage = cast.parentElement;
+      // Keep the message in view on narrow screens: center the stage between sender and receiver.
+      stage.scrollTo({ left: Math.max(0, (a.x + b.x) / 2 - stage.clientWidth / 2), behavior: "smooth" });
+      msg.style.transition = "none";
+      msg.textContent = step.text;
+      msg.classList.toggle("back", !!step.back);
+      const w = msg.offsetWidth, maxX = stage.scrollWidth - w - 4;
+      const clamp = x => Math.max(4, Math.min(maxX, x - w / 2));
+      msg.style.transform = `translate(${clamp(a.x)}px, ${a.y}px)`;
+      msg.offsetWidth; // restart the transition from the new origin
+      msg.style.transition = "";
+      msg.classList.add("show");
+      requestAnimationFrame(() => { msg.style.transform = `translate(${clamp(b.x)}px, ${b.y}px)`; });
+    }, 350 + n * STEP_MS));
+  });
+  if (steps.length) stepTimers.push(setTimeout(() => msg.classList.remove("show"), 350 + steps.length * STEP_MS));
+}
+
+function render() {
+  const s = SLIDES[index];
+  slideEl.classList.remove("fade"); void slideEl.offsetWidth; slideEl.classList.add("fade");
+  const chip = s.status ? `<span class="chip ${s.status}">${{ hecho: "Hecho", ahora: "Estamos acá", proximo: "Próximo", futuro: "Fase 2 · todavía no existe" }[s.status]}</span>` : "";
+  const esc = x => x.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const bubble = (who, text) => `<div class="bubble ${who}"><b class="who">${who === "you" ? "Vos" : "Claude"}</b>${text}</div>`;
+  const turns = [s.you && bubble("you", s.you), s.claude && bubble("claude", s.claude)].filter(Boolean);
+  const chat = turns.length ? `<div class="chat">${(s.claudeFirst ? turns.reverse() : turns).join("")}</div>` : "";
+  const cmds = s.cmds ? `<div class="cmds">${s.cmds.map(([who, c]) => `<div class="cmd"><span class="who ${who}">${who === "you" ? "lo corrés vos" : "lo corre Claude"}</span><span>${esc(c)}</span></div>`).join("")}</div>` : "";
+  slideEl.innerHTML = `<span class="phase">${s.phase}${chip}</span><h2>${s.title}</h2>${s.body || ""}${chat}${cmds}` +
+    (s.ex ? `<div class="example"><b class="lbl">En el ejemplo</b>${s.ex}</div>` : "") +
+    (s.note ? `<div class="note">${s.note}</div>` : "");
+  ACTORS.forEach(a => $("a-" + a.id).classList.toggle("on", s.on.includes(a.id)));
+  // On narrow screens the cast scrolls sideways: bring the first actor of this slide into view.
+  const stage = cast.parentElement, first = s.on.length && s.on.length < ACTORS.length ? $("a-" + s.on[0]) : null;
+  stage.scrollTo({ left: first ? Math.max(0, first.offsetLeft - 12) : 0, behavior: "smooth" });
+  [...$("dots").children].forEach((d, i) => d.classList.toggle("on", i === index));
+  $("count").textContent = `${index + 1} / ${SLIDES.length}`;
+  $("prev").disabled = index === 0;
+  $("next").disabled = index === SLIDES.length - 1;
+  setTimeout(() => animate(s.steps), 300);
+  restartTimer();
+}
+
+function go(i) { index = Math.max(0, Math.min(SLIDES.length - 1, i)); render(); }
+
+function restartTimer() {
+  clearTimeout(timer); cancelAnimationFrame(raf); $("bar").style.width = "0";
+  if (!playing) return;
+  const duration = Math.max(SLIDE_MS, 600 + SLIDES[index].steps.length * STEP_MS + 2500);
+  started = performance.now();
+  const tick = now => { $("bar").style.width = Math.min(100, (now - started) / duration * 100) + "%"; raf = requestAnimationFrame(tick); };
+  raf = requestAnimationFrame(tick);
+  timer = setTimeout(() => {
+    if (index < SLIDES.length - 1) go(index + 1); else setPlaying(false);
+  }, duration);
+}
+
+function setPlaying(on) {
+  playing = on;
+  $("play").textContent = on ? "❚❚ Pausar" : "▶ Reproducir";
+  if (on && index === SLIDES.length - 1) { go(0); return; }
+  restartTimer();
+}
+
+$("prev").addEventListener("click", () => go(index - 1));
+$("next").addEventListener("click", () => go(index + 1));
+$("play").addEventListener("click", () => setPlaying(!playing));
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") go(index + 1);
+  else if (e.key === "ArrowLeft") go(index - 1);
+  else if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden && playing) setPlaying(false); });
+window.addEventListener("resize", () => animate(SLIDES[index].steps));
+
+$("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+});
+
+render();
+</script>
+</body>
+</html>
