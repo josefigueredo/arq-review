@@ -65,6 +65,20 @@ class StructureTest(unittest.TestCase):
         for node in nodes:
             self.assertNotIn("JSM", node["summary"] + node["description"], node["summary"])
 
+    def test_every_node_has_a_unique_stable_id(self):
+        plan = build_plan(meta("complejo"), validacion=True)
+        nodes = [plan["epic"]] + plan["items"] + [s for i in plan["items"] for s in i["subtasks"]]
+        ids = [n["node"] for n in nodes]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(plan["epic"]["node"], "epica")
+        self.assertIn("intake/abrir-ticket", ids)
+
+    def test_followup_ids_depend_on_the_condition_not_its_position(self):
+        a = followup_plan(meta("simple"), ["Apagado fuera de horario", "Presupuesto"])["subtasks"]
+        b = followup_plan(meta("simple"), ["Presupuesto", "Apagado fuera de horario"])["subtasks"]
+        self.assertEqual({n["node"] for n in a}, {n["node"] for n in b})
+        self.assertTrue(all(n["node"].startswith("condicion/") for n in a))
+
     def test_requires_triage(self):
         with self.assertRaisesRegex(StructureError, "arq triage"):
             build_plan(meta(""))

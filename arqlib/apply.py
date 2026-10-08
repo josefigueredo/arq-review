@@ -8,6 +8,9 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 
+NODE_PROPERTY = "arq.node"
+
+
 class ApplyError(ValueError):
     pass
 
@@ -26,7 +29,7 @@ def known_from_journal(entries: List[dict], label: str, pry: str) -> Tuple[List[
     return issues, jsm
 
 
-def _index(client, label: str, known: Sequence[dict]) -> Dict[Tuple[str, Optional[str]], str]:
+def _found(client, label: str, known: Sequence[dict]) -> List[dict]:
     found = client.search_label(label)
     seen = {issue["key"] for issue in found}
     for entry in known:
@@ -35,7 +38,21 @@ def _index(client, label: str, known: Sequence[dict]) -> Dict[Tuple[str, Optiona
             if brief is not None:
                 found.append(brief)
                 seen.add(brief["key"])
-    return {(issue["summary"], issue["parent"]): issue["key"] for issue in found}
+    return found
+
+
+class _Index:
+    """Existing issues by stable id; issues created before ids existed are kept by (summary, parent) to migrate."""
+
+    def __init__(self, client, label: str, known: Sequence[dict]):
+        self.by_node: Dict[str, str] = {}
+        self.by_text: Dict[Tuple[str, Optional[str]], str] = {}
+        for issue in _found(client, label, known):
+            prop = client.get_property(issue["key"], NODE_PROPERTY)
+            if prop and prop.get("id"):
+                self.by_node[prop["id"]] = issue["key"]
+            else:
+                self.by_text[(issue["summary"], issue["parent"])] = issue["key"]
 
 
 def _fields(project: str, issue_type: str, node: dict, parent: Optional[str]) -> dict:
@@ -47,25 +64,30 @@ def _fields(project: str, issue_type: str, node: dict, parent: Optional[str]) ->
 
 
 class _Ensurer:
-    def __init__(self, client, project: str, existing: Dict[Tuple[str, Optional[str]], str]):
-        self.client, self.project, self.existing = client, project, existing
+    def __init__(self, client, project: str, index: _Index):
+        self.client, self.project, self.index = client, project, index
         self.created: List[str] = []
         self.reused: List[str] = []
 
     def __call__(self, node: dict, issue_type: str, parent: Optional[str]) -> str:
-        key = self.existing.get((node["summary"], parent))
+        key = self.index.by_node.get(node["node"])
         if key:
             self.reused.append(key)
             return key
-        key = self.client.create(_fields(self.project, issue_type, node, parent))
-        self.existing[(node["summary"], parent)] = key
-        self.created.append(key)
+        key = self.index.by_text.pop((node["summary"], parent), None)
+        if key:  # created before stable ids: adopt it once, by its text
+            self.reused.append(key)
+        else:
+            key = self.client.create(_fields(self.project, issue_type, node, parent))
+            self.created.append(key)
+        self.client.set_property(key, NODE_PROPERTY, {"id": node["node"]})
+        self.index.by_node[node["node"]] = key
         return key
 
 
 def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
                known: Sequence[dict] = ()) -> Dict[str, object]:
-    ensure = _Ensurer(client, project, _index(client, plan["epic"]["labels"][0], known))
+    ensure = _Ensurer(client, project, _Index(client, plan["epic"]["labels"][0], known))
     epic = ensure(plan["epic"], issue_types["epic"], None)
     for item in plan["items"]:
         item_key = ensure(item, issue_types[item["type"]], epic)
@@ -76,13 +98,14 @@ def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
 
 def apply_followups(follow: dict, label: str, client, project: str, issue_types: Dict[str, str],
                     known: Sequence[dict] = ()) -> Dict[str, object]:
-    existing = _index(client, label, known)
-    parents = [key for (summary, _), key in existing.items() if summary == follow["parent_summary"]]
-    if not parents:
+    index = _Index(client, label, known)
+    parent = index.by_node.get(follow["parent_node"]) or next(
+        (key for (summary, _), key in index.by_text.items() if summary == follow["parent_summary"]), None)
+    if not parent:
         raise ApplyError(f"no existe {follow['parent_summary']!r} en Jira: correr `arq jira` con --apply primero")
-    ensure = _Ensurer(client, project, existing)
+    ensure = _Ensurer(client, project, index)
     for sub in follow["subtasks"]:
-        ensure(sub, issue_types["subtask"], parents[0])
+        ensure(sub, issue_types["subtask"], parent)
     return {"created": ensure.created, "reused": ensure.reused}
 
 

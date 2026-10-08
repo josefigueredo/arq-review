@@ -76,6 +76,22 @@ class Jira:
         return {"key": issue.get("key", key), "summary": fields.get("summary"),
                 "parent": (fields.get("parent") or {}).get("key")}
 
+    def set_property(self, key: str, name: str, value: dict) -> None:
+        check_key(key)
+        if not _LABEL.fullmatch(name):
+            raise JiraError(f"nombre de propiedad inválido {name!r}")
+        self._send("PUT", f"/rest/api/2/issue/{key}/properties/{name}", value)
+        self._journal({"action": "property", "key": key, "name": name, "value": value})
+
+    def get_property(self, key: str, name: str) -> Optional[dict]:
+        check_key(key)
+        try:
+            return self._send("GET", f"/rest/api/2/issue/{key}/properties/{name}").get("value")
+        except JiraError as exc:
+            if exc.status == 404:
+                return None
+            raise
+
     def create(self, fields: dict) -> str:
         key = self._send("POST", "/rest/api/2/issue", {"fields": fields}).get("key")
         if not key:

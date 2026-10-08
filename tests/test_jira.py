@@ -131,6 +131,18 @@ class JiraTest(unittest.TestCase):
                                            {"body": "hola"}))
         self.assertEqual([(e["action"], e.get("public")) for e in log], [("watcher", None), ("comment", True)])
 
+    def test_entity_properties(self):
+        opener, log = FakeOpener(None, {"key": "arq.node", "value": {"id": "epica"}}), []
+        jira = client(opener, log)
+        jira.set_property("PLATE-614", "arq.node", {"id": "epica"})
+        self.assertEqual(jira.get_property("PLATE-614", "arq.node"), {"id": "epica"})
+        self.assertEqual(opener.calls[0], ("PUT", "https://x.atlassian.net/rest/api/2/issue/PLATE-614/properties/arq.node",
+                                           {"id": "epica"}))
+        self.assertEqual(opener.calls[1][:2], ("GET", "https://x.atlassian.net/rest/api/2/issue/PLATE-614/properties/arq.node"))
+        self.assertEqual(log[0]["action"], "property")
+        missing = urllib.error.HTTPError("u", 404, "Not Found", {}, io.BytesIO(b"{}"))
+        self.assertIsNone(client(FakeOpener(missing)).get_property("PLATE-614", "arq.node"))
+
     def test_get_brief(self):
         opener = FakeOpener({"key": "ARQ-2", "fields": {"summary": "s", "parent": {"key": "ARQ-1"}}})
         self.assertEqual(client(opener).get_brief("ARQ-2"), {"key": "ARQ-2", "summary": "s", "parent": "ARQ-1"})

@@ -39,6 +39,7 @@ class FakeJira:
         self.hidden: Set[str] = set()  # created but not yet visible to search (eventual consistency)
         self.fail_link = False
         self.reject_reporter = False
+        self.properties: Dict[tuple, dict] = {}
         self.watchers: List[tuple] = []
 
     def search_label(self, label: str) -> List[dict]:
@@ -58,6 +59,16 @@ class FakeJira:
         self.issues[key] = {"summary": fields["summary"], "labels": list(fields.get("labels", [])),
                             "type": fields["issuetype"]["name"], "parent": (fields.get("parent") or {}).get("key")}
         return key
+
+    def rename(self, key: str, summary: str) -> None:
+        """What a person does by hand in Jira."""
+        self.issues[key]["summary"] = summary
+
+    def set_property(self, key: str, name: str, value: dict) -> None:
+        self.properties[(key, name)] = value
+
+    def get_property(self, key: str, name: str) -> Optional[dict]:
+        return self.properties.get((key, name))
 
     def link(self, inward: str, outward: str, link_type: str) -> None:
         if self.fail_link:

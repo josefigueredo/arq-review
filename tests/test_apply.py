@@ -48,6 +48,40 @@ class ApplyTest(unittest.TestCase):
         self.assertEqual(len(jira.issues), 1 + 3 + 8)
         self.assertEqual(sum(1 for i in jira.issues.values() if i["type"] == "Story"), 3)
 
+    def test_created_issues_carry_their_stable_id(self):
+        jira = helpers.FakeJira()
+        apply_plan(plan(), jira, "ARQ", TYPES)
+        self.assertEqual(jira.get_property("ARQ-1", "arq.node"), {"id": "epica"})
+        self.assertEqual(jira.get_property("ARQ-2", "arq.node"), {"id": "revision"})
+
+    def test_renamed_issue_is_not_duplicated(self):
+        jira = helpers.FakeJira()
+        apply_plan(plan(), jira, "ARQ", TYPES)
+        jira.rename("ARQ-3", "Triage (renombrado a mano)")
+        jira.rename("ARQ-1", "Épica con otro nombre")
+        again = apply_plan(plan(), jira, "ARQ", TYPES)
+        self.assertEqual((again["created"], again["epica"], len(jira.issues)), ([], "ARQ-1", 7))
+
+    def test_legacy_issues_without_id_are_matched_by_text_once_and_migrated(self):
+        jira = helpers.FakeJira()
+        apply_plan(plan(), jira, "ARQ", TYPES)
+        jira.properties.clear()  # creados por una versión anterior de arq
+        again = apply_plan(plan(), jira, "ARQ", TYPES)
+        self.assertEqual((again["created"], len(jira.issues)), ([], 7))
+        self.assertEqual(jira.get_property("ARQ-3", "arq.node"), {"id": "revision/triage"})
+        jira.rename("ARQ-3", "otro texto")
+        self.assertEqual(apply_plan(plan(), jira, "ARQ", TYPES)["created"], [])
+
+    def test_followup_survives_rename(self):
+        jira = helpers.FakeJira()
+        meta = {"pry": "PRY-2026-0028", "nombre": "PoC", "nivel": "simple"}
+        apply_plan(plan(), jira, "ARQ", TYPES)
+        follow = followup_plan(meta, ["Apagado fuera de horario"])
+        [key] = apply_followups(follow, "pry:2026-0028", jira, "ARQ", TYPES)["created"]
+        jira.rename(key, "Condición cumplida")
+        jira.rename("ARQ-2", "Revisión (renombrada)")
+        self.assertEqual(apply_followups(follow, "pry:2026-0028", jira, "ARQ", TYPES)["created"], [])
+
     def test_journal_covers_search_lag(self):
         jira = helpers.FakeJira(fail_on_create=4)
         with self.assertRaises(helpers.FailingJira):
@@ -96,10 +130,12 @@ class ApplyTest(unittest.TestCase):
 
     def test_same_subtask_summary_under_different_parents_is_not_confused(self):
         jira = helpers.FakeJira()
-        sub = {"summary": "Revisión y firma", "labels": ["pry:2026-0028"], "description": "d"}
-        custom = {"epic": {"summary": "E", "labels": ["pry:2026-0028"], "description": "d"},
-                  "items": [{"type": "story", "summary": s, "labels": ["pry:2026-0028"], "description": "d",
-                             "subtasks": [dict(sub)]} for s in ("A", "B")]}
+        def sub(parent):
+            return {"node": f"{parent}/firma", "summary": "Revisión y firma", "labels": ["pry:2026-0028"],
+                    "description": "d"}
+        custom = {"epic": {"node": "epica", "summary": "E", "labels": ["pry:2026-0028"], "description": "d"},
+                  "items": [{"node": s, "type": "story", "summary": s, "labels": ["pry:2026-0028"], "description": "d",
+                             "subtasks": [sub(s)]} for s in ("A", "B")]}
         apply_plan(custom, jira, "ARQ", TYPES)
         again = apply_plan(custom, jira, "ARQ", TYPES)
         self.assertEqual(len(jira.issues), 5)  # épica + 2 stories + 2 sub-tasks con el mismo nombre

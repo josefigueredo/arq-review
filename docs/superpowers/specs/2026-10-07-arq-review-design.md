@@ -226,7 +226,7 @@ Reglas del cliente (`arqlib/jira.py` cubre Jira y JSM):
 - **Idempotencia en tres capas:** (1) búsqueda JQL `labels = "pry:YYYY-NNNN"`; (2) las claves del journal que la
   búsqueda todavía no devuelve se confirman una por una, porque `search/jql` de Jira Cloud es eventualmente
   consistente; (3) en JSM, `jsm` se guarda apenas existe el pedido y `jsm_listo=si` solo cuando tiene labels,
-  participantes y link, así un re-run completa lo que falta. Un issue que ya existe se **reutiliza tal cual**: no se
+  participantes y link, así un re-run completa lo que falta. Cada issue lleva un **ID estable** en la entity property `arq.node` (por ejemplo `intake/abrir-ticket`, o `condicion/<hash>` para el seguimiento): se lo reconoce por ese ID, no por su texto, así que renombrarlo a mano en Jira o cambiar el texto en el código no lo duplica. Un issue creado antes de que existieran los IDs se reconoce una sola vez por (summary, padre) y se le graba el ID. Un issue que ya existe se **reutiliza tal cual**: no se
   modifica, porque el nivel no cambia una vez creada la épica y no hay otro campo que actualizar.
 - **Claves validadas** (`[A-Z][A-Z0-9]+-\d+`) antes de entrar en cualquier URL; `JIRA_BASE_URL` tiene que ser https.
 - **JSM:** `arq jsm --public` (Reply to customer) y `arq jsm --internal` (nota interna) son canales distintos. El
