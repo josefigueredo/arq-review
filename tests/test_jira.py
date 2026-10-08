@@ -161,6 +161,13 @@ class JiraTest(unittest.TestCase):
         self.assertEqual(opener.calls[0][2]["fields"], ["summary", "issuetype", "status", "parent", "assignee"])
         self.assertEqual(jira.browse_url("PLATE-614"), "https://x.atlassian.net/browse/PLATE-614")
 
+    def test_update_description(self):
+        opener, log = FakeOpener(None), []
+        client(opener, log).update_description("PLATE-627", "h3. Hola")
+        self.assertEqual(opener.calls[0], ("PUT", "https://x.atlassian.net/rest/api/2/issue/PLATE-627",
+                                           {"fields": {"description": "h3. Hola"}}))
+        self.assertEqual(log[0], {"action": "description", "key": "PLATE-627", "chars": 8})
+
     def test_get_brief(self):
         opener = FakeOpener({"key": "ARQ-2", "fields": {"summary": "s", "parent": {"key": "ARQ-1"}}})
         self.assertEqual(client(opener).get_brief("ARQ-2"), {"key": "ARQ-2", "summary": "s", "parent": "ARQ-1"})

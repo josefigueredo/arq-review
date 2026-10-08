@@ -65,6 +65,11 @@ class Jira:
                 return found
             body = dict(body, nextPageToken=token)
 
+    def update_description(self, key: str, text: str) -> None:
+        check_key(key)
+        self._send("PUT", f"/rest/api/2/issue/{key}", {"fields": {"description": text}})
+        self._journal({"action": "description", "key": key, "chars": len(text)})
+
     def browse_url(self, key: str) -> str:
         return f"{self.base}/browse/{key}"
 

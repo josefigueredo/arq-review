@@ -56,7 +56,8 @@ class FakeJira:
             raise FailingJira(f"HTTP 400 en el alta #{self.creates}")
         key = f"{self.project}-{self.seq}"
         self.seq += 1
-        self.issues[key] = {"summary": fields["summary"], "labels": list(fields.get("labels", [])),
+        self.issues[key] = {"summary": fields["summary"], "description": fields.get("description", ""),
+                            "labels": list(fields.get("labels", [])),
                             "type": fields["issuetype"]["name"], "parent": (fields.get("parent") or {}).get("key")}
         return key
 
@@ -67,6 +68,9 @@ class FakeJira:
         return [{"key": k, "summary": i["summary"], "type": i["type"], "status": i.get("status", "Backlog"),
                  "category": i.get("category", "todo"), "parent": i["parent"], "assignee": i.get("assignee")}
                 for k, i in self.issues.items() if label in i["labels"] and k not in self.hidden]
+
+    def update_description(self, key: str, text: str) -> None:
+        self.issues[key]["description"] = text
 
     def rename(self, key: str, summary: str) -> None:
         """What a person does by hand in Jira."""

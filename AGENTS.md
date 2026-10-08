@@ -8,6 +8,8 @@
 - **Nunca cambiar el ID de un nodo** (`node` en `arqlib/structure.py`, que se graba como entity property `arq.node`):
   equivale a crear issues nuevos en todos los pedidos ya abiertos. Los textos (`summary`, `description`) sí se pueden
   cambiar.
+- arq es dueño de las descripciones de los issues (`summary.render_epic` para la épica, `structure.DOCS` para el
+  resto) y las reescribe cuando cambian. No escribir nunca en comentarios ni en responsables.
 - Un golden case (`tests/golden/`) se corrige solo cuando cambia la evidencia (triage real, documentación vigente),
   nunca para que pase una salida del architect.
 - Las skills (`skills/*/SKILL.md`) solo nombran subcomandos que existen y nunca corren `--apply` sin `!`:

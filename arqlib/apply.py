@@ -5,6 +5,7 @@ confirmed one by one, because Jira Cloud's search/jql is eventually consistent a
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 
@@ -47,10 +48,12 @@ class _Index:
     def __init__(self, client, label: str, known: Sequence[dict]):
         self.by_node: Dict[str, str] = {}
         self.by_text: Dict[Tuple[str, Optional[str]], str] = {}
+        self.desc: Dict[str, str] = {}  # key → hash of the description arq last wrote
         for issue in _found(client, label, known):
             prop = client.get_property(issue["key"], NODE_PROPERTY)
             if prop and prop.get("id"):
                 self.by_node[prop["id"]] = issue["key"]
+                self.desc[issue["key"]] = prop.get("desc", "")
             else:
                 self.by_text[(issue["summary"], issue["parent"])] = issue["key"]
 
@@ -63,26 +66,47 @@ def _fields(project: str, issue_type: str, node: dict, parent: Optional[str]) ->
     return fields
 
 
+def _digest(text: str) -> str:
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+
+
 class _Ensurer:
+    """Creates what is missing and keeps every description as arq generated it (arq owns descriptions; notes go in
+    comments). A description is written only when its hash differs from the one stored in `arq.node`."""
+
     def __init__(self, client, project: str, index: _Index):
         self.client, self.project, self.index = client, project, index
         self.created: List[str] = []
         self.reused: List[str] = []
+        self.updated: List[str] = []
 
     def __call__(self, node: dict, issue_type: str, parent: Optional[str]) -> str:
+        digest = _digest(node["description"])
         key = self.index.by_node.get(node["node"])
         if key:
             self.reused.append(key)
+            if self.index.desc.get(key) != digest:
+                self._refresh(key, node, digest)
             return key
         key = self.index.by_text.pop((node["summary"], parent), None)
         if key:  # created before stable ids: adopt it once, by its text
             self.reused.append(key)
-        else:
-            key = self.client.create(_fields(self.project, issue_type, node, parent))
-            self.created.append(key)
-        self.client.set_property(key, NODE_PROPERTY, {"id": node["node"]})
-        self.index.by_node[node["node"]] = key
+            self._refresh(key, node, digest)
+            return key
+        key = self.client.create(_fields(self.project, issue_type, node, parent))
+        self.created.append(key)
+        self._remember(key, node, digest)
         return key
+
+    def _refresh(self, key: str, node: dict, digest: str) -> None:
+        self.client.update_description(key, node["description"])
+        self.updated.append(key)
+        self._remember(key, node, digest)
+
+    def _remember(self, key: str, node: dict, digest: str) -> None:
+        self.client.set_property(key, NODE_PROPERTY, {"id": node["node"], "desc": digest})
+        self.index.by_node[node["node"]] = key
+        self.index.desc[key] = digest
 
 
 def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
@@ -93,7 +117,13 @@ def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
         item_key = ensure(item, issue_types[item["type"]], epic)
         for sub in item["subtasks"]:
             ensure(sub, issue_types["subtask"], item_key)
-    return {"epica": epic, "created": ensure.created, "reused": ensure.reused}
+    return {"epica": epic, "created": ensure.created, "reused": ensure.reused, "updated": ensure.updated}
+
+
+def sync_epic(client, key: str, epic: dict) -> None:
+    """Rewrite the epic's description after the requester's ticket exists, so a first run is already complete."""
+    client.update_description(key, epic["description"])
+    client.set_property(key, NODE_PROPERTY, {"id": epic["node"], "desc": _digest(epic["description"])})
 
 
 def apply_followups(follow: dict, label: str, client, project: str, issue_types: Dict[str, str],
@@ -106,7 +136,7 @@ def apply_followups(follow: dict, label: str, client, project: str, issue_types:
     ensure = _Ensurer(client, project, index)
     for sub in follow["subtasks"]:
         ensure(sub, issue_types["subtask"], parent)
-    return {"created": ensure.created, "reused": ensure.reused}
+    return {"created": ensure.created, "reused": ensure.reused, "updated": ensure.updated}
 
 
 def _software(config: dict) -> bool:

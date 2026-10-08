@@ -11,7 +11,7 @@ from typing import Callable, List, Mapping, Optional
 from arqlib import config as cfg
 from arqlib import fields, review, state, triage
 from arqlib.board import render_board
-from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal
+from arqlib.apply import apply_followups, apply_plan, ensure_request, known_from_journal, sync_epic
 from arqlib.constraints import lint
 from arqlib.evaluate import evaluate_files
 from arqlib.jira import Jira, JiraError, check_key
@@ -130,7 +130,7 @@ def _print_plan(plan: dict) -> None:
 def _jira(ctx: Context, args) -> int:
     meta, body = review.load(ctx.repo, args.pry)
     config = cfg.load_config(ctx.repo, require_canal=args.apply)
-    plan = build_plan(meta, validacion=args.con_validacion)
+    plan = build_plan(meta, validacion=args.con_validacion, review_body=body)
     _print_plan(plan)
     if args.html:
         Path(args.html).write_text(render_html(plan, meta), encoding="utf-8")
@@ -163,7 +163,10 @@ def _jira(ctx: Context, args) -> int:
             raise JiraError(f"{exc}. El pedido {meta['jsm']} quedó creado: volver a correr "
                             f"`arq jira {args.pry} --apply` para completar labels, participantes y link") from exc
         raise
-    print(f"épica: {result['epica']} (creados {len(result['created'])}, existentes {len(result['reused'])})")
+    if created:  # the epic was written before the ticket existed: bring its summary up to date now
+        sync_epic(client, result["epica"], build_plan(meta, validacion=args.con_validacion, review_body=body)["epic"])
+    print(f"épica: {result['epica']} (creados {len(result['created'])}, existentes {len(result['reused'])}; "
+          f"descripciones actualizadas: {len(result['updated'])})")
     print(f"jsm: {jsm} ({'creado' if created else 'ya existía'}; labels, participantes y link al día)")
     return 0
 

@@ -231,6 +231,16 @@ class CliTest(unittest.TestCase):
         self.assertIn("Avance de la épica: 0 de 7 hechas", out)  # simple: épica + task + 5 sub-tasks
         self.assertNotIn("\x1b]8", out)
 
+    def test_rerun_syncs_the_epic_with_the_review(self):
+        repo, fake = ready_repo(), helpers.FakeJira()
+        run(repo, "triage", PRY, "--answers", ALL_NO)
+        run(repo, "jira", PRY, "--apply", fake=fake)
+        self.assertIn("descripciones actualizadas: 0", run(repo, "jira", PRY, "--apply", fake=fake)[1])
+        run(repo, "state", PRY, "--to", "esperando-info")
+        run(repo, "set", PRY, "faltantes=costo_estimado")
+        self.assertIn("descripciones actualizadas: 1", run(repo, "jira", PRY, "--apply", fake=fake)[1])
+        self.assertIn("*Input faltante:* costo_estimado", fake.issues["ARQ-1"]["description"])
+
     def test_bad_pry_never_touches_disk(self):
         repo = helpers.make_repo()
         run(repo, "init")

@@ -79,6 +79,25 @@ class StructureTest(unittest.TestCase):
         self.assertEqual({n["node"] for n in a}, {n["node"] for n in b})
         self.assertTrue(all(n["node"].startswith("condicion/") for n in a))
 
+    def test_every_description_says_why_what_how_and_done(self):
+        for nivel in ("simple", "complejo"):
+            plan = build_plan(meta(nivel), validacion=True)
+            nodes = plan["items"] + [s for i in plan["items"] for s in i["subtasks"]]
+            for node in nodes:
+                text = node["description"]
+                for part in ("Por qué: ", "Qué: ", "Cómo: ", "Terminado cuando: "):
+                    self.assertIn(part, text, (node["node"], part))
+                self.assertIn("Generado por arq desde reviews/PRY-2026-0028.md", text)
+
+    def test_how_names_the_commands_for_this_pry(self):
+        plan = build_plan(meta("complejo"))
+        gap = next(s for i in plan["items"] for s in i["subtasks"] if s["node"] == "analisis/gap-check")
+        self.assertIn("arq set PRY-2026-0028 faltantes=", gap["description"])
+
+    def test_epic_description_comes_from_the_review(self):
+        plan = build_plan(meta("complejo"), review_body="## Lo que entendimos\n\nMigrar PB `[pedido]`.\n")
+        self.assertIn("h3. Lo que entendimos", plan["epic"]["description"])
+
     def test_requires_triage(self):
         with self.assertRaisesRegex(StructureError, "arq triage"):
             build_plan(meta(""))

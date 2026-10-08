@@ -65,6 +65,9 @@ se puede repetir mientras no exista la épica.
 5. Ante cualquier falla, el mismo `! arq jira PRY-AAAA-NNNN --apply` reanuda sin duplicar.
 6. Después del `--apply`, verificar en la salida `creados N, existentes M` y el ticket del requirente. Renombrar un
    issue a mano en Jira es seguro: `arq` lo reconoce por su ID estable (`arq.node`), no por el texto.
+7. **Cada vez que el review cambia** (gap check, análisis, firma, cierre), volver a darle al usuario
+   `! arq jira PRY-AAAA-NNNN --apply`: actualiza la descripción de la épica con el resumen del review, para que Jira
+   muestre lo mismo que git. Las descripciones no se editan a mano en Jira (se pisan); las notas van en comentarios.
 
 ## 4. Plazo y pedido de información
 

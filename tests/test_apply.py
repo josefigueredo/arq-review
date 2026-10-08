@@ -51,8 +51,26 @@ class ApplyTest(unittest.TestCase):
     def test_created_issues_carry_their_stable_id(self):
         jira = helpers.FakeJira()
         apply_plan(plan(), jira, "ARQ", TYPES)
-        self.assertEqual(jira.get_property("ARQ-1", "arq.node"), {"id": "epica"})
-        self.assertEqual(jira.get_property("ARQ-2", "arq.node"), {"id": "revision"})
+        self.assertEqual(jira.get_property("ARQ-1", "arq.node")["id"], "epica")
+        self.assertEqual(jira.get_property("ARQ-2", "arq.node")["id"], "revision")
+
+    def test_descriptions_are_rewritten_only_when_they_change(self):
+        jira = helpers.FakeJira()
+        first = apply_plan(plan(), jira, "ARQ", TYPES)
+        self.assertEqual(first["updated"], [])
+        self.assertEqual(apply_plan(plan(), jira, "ARQ", TYPES)["updated"], [])
+        changed = build_plan({"pry": "PRY-2026-0028", "nombre": "PoC", "nivel": "simple"},
+                             review_body="## Lo que entendimos\n\nAlgo nuevo.\n")
+        again = apply_plan(changed, jira, "ARQ", TYPES)
+        self.assertEqual((again["updated"], again["created"]), (["ARQ-1"], []))
+        self.assertIn("Algo nuevo.", jira.issues["ARQ-1"]["description"])
+
+    def test_legacy_issue_gets_its_description_once(self):
+        jira = helpers.FakeJira()
+        apply_plan(plan(), jira, "ARQ", TYPES)
+        jira.properties = {k: {"id": v["id"]} for k, v in jira.properties.items()}  # sin hash: creado por arq viejo
+        self.assertEqual(len(apply_plan(plan(), jira, "ARQ", TYPES)["updated"]), 7)
+        self.assertEqual(apply_plan(plan(), jira, "ARQ", TYPES)["updated"], [])
 
     def test_renamed_issue_is_not_duplicated(self):
         jira = helpers.FakeJira()
@@ -68,7 +86,7 @@ class ApplyTest(unittest.TestCase):
         jira.properties.clear()  # creados por una versión anterior de arq
         again = apply_plan(plan(), jira, "ARQ", TYPES)
         self.assertEqual((again["created"], len(jira.issues)), ([], 7))
-        self.assertEqual(jira.get_property("ARQ-3", "arq.node"), {"id": "revision/triage"})
+        self.assertEqual(jira.get_property("ARQ-3", "arq.node")["id"], "revision/triage")
         jira.rename("ARQ-3", "otro texto")
         self.assertEqual(apply_plan(plan(), jira, "ARQ", TYPES)["created"], [])
 
