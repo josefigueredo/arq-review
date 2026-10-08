@@ -7,7 +7,7 @@ Hay una imagen de cada diagrama al lado de este archivo, para pegar donde no se 
 presentaciones): `jira-flujo-boards.png` y `jira-flujo-secuencia.png`. Si cambia un diagrama, se regeneran con:
 
 ```bash
-mmdc -i docs/diagrams/jira-flujo.md -o /tmp/jira-flujo.png -b white -w 2400 \
+mmdc -i docs/diagrams/jira-flujo.md -o /tmp/jira-flujo.png -b white -w 2200 -s 2 \
   && cp /tmp/jira-flujo-1.png docs/diagrams/jira-flujo-boards.png \
   && cp /tmp/jira-flujo-2.png docs/diagrams/jira-flujo-secuencia.png
 ```
@@ -24,11 +24,9 @@ mmdc -i docs/diagrams/jira-flujo.md -o /tmp/jira-flujo.png -b white -w 2400 \
   quedó fuera de la secuencia.
 
 ```mermaid
-%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 6, "bottom": 22}}}}%%
+%%{init: {"flowchart": {"wrappingWidth": 520, "subGraphTitleMargin": {"top": 8, "bottom": 24}, "nodeSpacing": 40, "rankSpacing": 60}}}%%
 flowchart LR
-    subgraph PLATE["Board PLATE"]
-        direction TB
-        subgraph E28["Épica PLATE-614 · PRY-2026-0028 PoC modelos IA Locales"]
+    subgraph E28["Board PLATE · Épica PLATE-614 · PRY-2026-0028 PoC modelos IA Locales"]
             direction TB
             subgraph S28a["PLATE-615 · Intake y triage"]
                 A1["1 · PLATE-616<br/>Normalizar pedido"]
@@ -44,10 +42,9 @@ flowchart LR
                 A7["7 · PLATE-624<br/>Revisión y firma"]
                 A8["8 · PLATE-625<br/>Publicar devolución"]
             end
-        end
     end
 
-    subgraph PEHD["Board PEHD"]
+    subgraph PEHD["Board PEHD · ticket del requirente"]
         direction TB
         T28["PEHD-86 · Tarea<br/>PRY-2026-0028 · PoC modelos IA Locales<br/>reporter: Juan Pablo Fernández"]
     end
@@ -68,6 +65,7 @@ Cada `--apply` lo corre una persona; cada paso que cambia el review se commitea 
 tareas en PLATE se mueve a mano (todavía no hay transición automática).
 
 ```mermaid
+%%{init: {"sequence": {"wrap": true, "width": 210, "actorMargin": 130, "messageMargin": 42, "boxMargin": 12, "noteMargin": 12}}}%%
 sequenceDiagram
     autonumber
     actor Req as Juan Pablo<br/>(requirente)
@@ -86,9 +84,9 @@ sequenceDiagram
     rect rgba(120, 160, 220, 0.12)
         Note over EM,PEHD: Intake (historia "Intake y triage")
         EM->>CLI: arq new (pedido textual, contacto, head)
-        CLI->>Git: reviews/PRY-2026-0028.md · estado recibido
+        CLI->>Git: review creado · recibido
         EM->>CLI: arq triage --answers (confirmadas por la persona)
-        CLI->>Git: nivel complejo (cross + duración desconocida) · estado triado
+        CLI->>Git: complejo (cross, sin duración) · triado
         EM->>CLI: arq jira --apply
         CLI->>PLATE: crea PLATE-614 con 3 historias y 8 sub-tasks (ID estable arq.node)
         CLI->>PEHD: crea PEHD-86 (reporter Juan Pablo, watcher Felipe López)
@@ -103,7 +101,7 @@ sequenceDiagram
         Note over Arq,PEHD: Gap check (sub-task "Gap check de input mínimo")
         loop hasta completar el input mínimo
             Arq->>CLI: arq set faltantes + análisis preliminar
-            CLI->>Git: estado esperando-info · faltan 10 de 13 datos
+            CLI->>Git: esperando-info · faltan 10 de 13
             EM->>CLI: arq jsm --public --template jsm-pedido-info --apply
             CLI->>PEHD: 11 preguntas concretas en PEHD-86 (8/10)
             EM->>CLI: arq jira --apply
@@ -118,7 +116,7 @@ sequenceDiagram
         Note over Arq,PLATE: Análisis (sub-tasks "Análisis vs constraints" y "Opciones y recomendación")
         Arq->>Git: evaluación por componente, original + 2 opciones, recomendación, condiciones, señales
         Arq->>CLI: arq set veredicto=aprobar-con-condiciones · arq state --to en-firma
-        CLI->>Git: estado en-firma · borradores de devolución y comentario PRY
+        CLI->>Git: en-firma · borradores listos
         EM->>CLI: arq jira --apply
         CLI->>PLATE: la épica muestra el análisis y el veredicto propuesto
     end
@@ -126,7 +124,7 @@ sequenceDiagram
     rect rgba(190, 140, 210, 0.12)
         Note over Firma,PEHD: Decisión (sub-tasks "Revisión y firma" y "Publicar devolución")
         Firma->>Git: revisa reviews/PRY-2026-0028.md
-        Firma->>CLI: arq set firmante · arq state --to publicado
+        Firma->>CLI: firma · pasa a publicado
         CLI->>Git: estado publicado
         EM->>CLI: arq jsm --public --template jsm-devolucion --apply
         CLI->>PEHD: devolución en PEHD-86 (ej.: apagado fuera de horario, presupuesto con alerta)
