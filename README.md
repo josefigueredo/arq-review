@@ -11,7 +11,7 @@ análisis vive en git.
 - Guía para agentes que modifican este repo: `AGENTS.md`
 - Diagramas de los boards de Jira y de la secuencia completa: `docs/diagrams/jira-flujo.md`
 - Presentación para público no técnico (HTML autocontenido): `docs/presentacion/revision-arquitectura.html`
-- Presentación para quien opera el proceso desde Claude Code: `docs/presentacion/seguimiento-claude-code.html`
+- Presentación para quien opera el proceso desde su agente de código (Claude Code, Codex o Cursor): `docs/presentacion/seguimiento-agente.html`
 
 ## Instalar
 
