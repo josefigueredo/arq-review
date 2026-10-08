@@ -8,18 +8,18 @@ from arqlib.review import check_pry
 COORD, TEC = "track:coordinacion", "track:tecnica"
 
 SIMPLE_SUBTASKS: Tuple[Tuple[str, str, str], ...] = (
-    ("Triage y apertura", COORD, "Contestar el triage, abrir la épica y el pedido en JSM, arrancar el plazo."),
+    ("Triage y apertura", COORD, "Contestar el triage, abrir la épica y el ticket del requirente, arrancar el plazo."),
     ("Gap check de input mínimo", TEC, "Contrastar el pedido con el input mínimo del nivel y pedir lo que falte."),
     ("Análisis y opciones", TEC, "Evaluar contra las constraints y proponer opciones para el componente más débil."),
     ("Revisión y firma", TEC, "Revisar el análisis y firmarlo."),
-    ("Publicar devolución", COORD, "Responder en JSM y dejar el comentario en la plataforma PRY."),
+    ("Publicar devolución", COORD, "Responder en el ticket del requirente y dejar el comentario en la plataforma PRY."),
 )
 
 COMPLEX_STORIES: Tuple[Tuple[str, Tuple[str, ...], str, Tuple[Tuple[str, str, str], ...]], ...] = (
     ("Intake y triage", (COORD,), "Dejar el pedido normalizado, triado y con canales abiertos.", (
         ("Normalizar pedido", COORD, "Pasar el pedido a reviews/PRY-XXXX.md."),
         ("Triage", COORD, "Contestar las preguntas de triage."),
-        ("Abrir JSM y plazo", COORD, "Crear el pedido en JSM y arrancar el plazo."),
+        ("Abrir ticket del requirente y plazo", COORD, "Crear el ticket del requirente y arrancar el plazo."),
     )),
     ("Análisis y opciones", (TEC,), "Producir el análisis con opciones y recomendación.", (
         ("Gap check de input mínimo", TEC, "Contrastar con el input mínimo del nivel complejo."),
@@ -31,7 +31,7 @@ COMPLEX_STORIES: Tuple[Tuple[str, Tuple[str, ...], str, Tuple[Tuple[str, str, st
     )),
     ("Decisión y comunicación", (COORD, TEC), "Firmar y comunicar la decisión.", (
         ("Revisión y firma", TEC, "Revisar el análisis y firmarlo."),
-        ("Publicar devolución", COORD, "Responder en JSM, comentar en la plataforma PRY y escalar a RFC si corresponde."),
+        ("Publicar devolución", COORD, "Responder en el ticket del requirente, comentar en la plataforma PRY y escalar a RFC si corresponde."),
     )),
 )
 

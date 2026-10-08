@@ -58,6 +58,13 @@ class StructureTest(unittest.TestCase):
             self.assertFalse(any(word in " ".join(node["labels"]) for word in ("sr", "expert", "lead", "dev")))
             self.assertTrue(node["description"].strip())
 
+    def test_issue_texts_are_channel_neutral(self):
+        # the requester's ticket may live in JSM or in a software help desk (canal_requirente)
+        plan = build_plan(meta("complejo"), validacion=True)
+        nodes = [plan["epic"]] + plan["items"] + [s for i in plan["items"] for s in i["subtasks"]]
+        for node in nodes:
+            self.assertNotIn("JSM", node["summary"] + node["description"], node["summary"])
+
     def test_requires_triage(self):
         with self.assertRaisesRegex(StructureError, "arq triage"):
             build_plan(meta(""))

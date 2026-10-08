@@ -1,9 +1,22 @@
 {
-  "nivel": "simple",
+  "nivel": "complejo",
   "estado": "esperando-info",
-  "debe_pedir": ["hipotesis_medible", "duracion_y_baja", "costo_estimado", "via_aprovisionamiento"],
-  "debe_citar": ["C-PLAT-01"],
+  "debe_pedir": [
+    "hipotesis_medible",
+    "duracion_y_baja",
+    "costo_estimado",
+    "via_aprovisionamiento",
+    "diagrama_c4",
+    "cuentas_entornos"
+  ],
+  "debe_citar": [
+    "C-PLAT-01",
+    "C-NET-02"
+  ],
   "componente_debil": "costo",
-  "senales": ["finops"],
+  "senales": [
+    "finops",
+    "cloud"
+  ],
   "sin_veredicto": true
 }

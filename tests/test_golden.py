@@ -54,9 +54,9 @@ class EvaluateTest(unittest.TestCase):
         self.assertIn("debe pedir costo_estimado", failures)
 
     def test_wrong_level_and_missing_signal_fail(self):
-        self.meta.update(nivel="complejo", senales="")
+        self.meta.update(nivel="simple", senales="")
         failures = evaluate(self.expected, self.meta, self.body)
-        self.assertIn("nivel: esperado 'simple', obtenido 'complejo'", failures)
+        self.assertIn("nivel: esperado 'complejo', obtenido 'simple'", failures)
         self.assertIn("debe señalar finops", failures)
 
 
