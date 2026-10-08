@@ -29,7 +29,7 @@ class ConfigTest(unittest.TestCase):
         repo = helpers.make_repo()
         init_repo(repo)
         with self.assertRaisesRegex(ConfigError, "jsm_service_desk_id"):
-            load_config(repo, require_jsm=True)
+            load_config(repo, require_canal=True)
 
     def _write(self, repo, **changes):
         path = repo / ".arq" / "config.json"
@@ -59,7 +59,23 @@ class ConfigTest(unittest.TestCase):
         init_repo(repo)
         self._write(repo, jsm_service_desk_id="3", jsm_request_type_id="41")
         with self.assertRaisesRegex(ConfigError, "jsm_project"):
-            load_config(repo, require_jsm=True)
+            load_config(repo, require_canal=True)
+
+    def test_software_canal_requires_helpdesk_fields(self):
+        repo = helpers.make_repo()
+        init_repo(repo)
+        self._write(repo, canal_requirente="software", helpdesk_project="PEHD")
+        with self.assertRaisesRegex(ConfigError, "helpdesk_issue_type"):
+            load_config(repo, require_canal=True)
+        self._write(repo, helpdesk_issue_type="Tarea")
+        self.assertEqual(load_config(repo, require_canal=True)["helpdesk_project"], "PEHD")
+
+    def test_unknown_canal(self):
+        repo = helpers.make_repo()
+        init_repo(repo)
+        self._write(repo, canal_requirente="mail")
+        with self.assertRaisesRegex(ConfigError, "canal_requirente"):
+            load_config(repo)
 
     def test_credentials(self):
         env = {"JIRA_BASE_URL": "https://x.atlassian.net", "JIRA_EMAIL": "a@b", "JIRA_API_TOKEN": "t"}

@@ -20,7 +20,8 @@ def known_from_journal(entries: List[dict], label: str, pry: str) -> Tuple[List[
         if entry.get("action") == "create" and label in (fields.get("labels") or []):
             issues.append({"key": entry.get("key"), "summary": fields.get("summary"),
                            "parent": (fields.get("parent") or {}).get("key")})
-        elif entry.get("action") == "jsm-request" and str(entry.get("summary", "")).startswith(f"{pry} "):
+        elif entry.get("action") in ("jsm-request", "helpdesk-issue") and \
+                str(entry.get("summary", "")).startswith(f"{pry} "):
             jsm.append(entry.get("key"))
     return issues, jsm
 
@@ -85,8 +86,13 @@ def apply_followups(follow: dict, label: str, client, project: str, issue_types:
     return {"created": ensure.created, "reused": ensure.reused}
 
 
+def _software(config: dict) -> bool:
+    return config.get("canal_requirente", "jsm") == "software"
+
+
 def _existing_request(client, config: dict, label: str, known_jsm: Sequence[str]) -> Optional[str]:
-    prefix = f"{config['jsm_project']}-"
+    project = config["helpdesk_project"] if _software(config) else config["jsm_project"]
+    prefix = f"{project}-"
     for issue in client.search_label(label):
         if issue["key"].startswith(prefix):
             return issue["key"]
@@ -108,15 +114,24 @@ def ensure_request(meta: Dict[str, str], client, config: dict, description: str,
         return meta["jsm"], False
     key = meta.get("jsm") or _existing_request(client, config, labels[0], known_jsm)
     created = False
+    summary = f"{meta['pry']} · {meta.get('nombre', '')}"
     if not key:
         requester = client.find_user(meta["contacto"])  # before creating: never raise a ticket on someone else's behalf
-        key = client.create_request(str(config["jsm_service_desk_id"]), str(config["jsm_request_type_id"]),
-                                    f"{meta['pry']} · {meta.get('nombre', '')}", description, on_behalf_of=requester)
+        if _software(config):
+            key = client.create_helpdesk_issue(config["helpdesk_project"], config["helpdesk_issue_type"], summary,
+                                               description, labels, requester)
+        else:
+            key = client.create_request(str(config["jsm_service_desk_id"]), str(config["jsm_request_type_id"]),
+                                        summary, description, on_behalf_of=requester)
         created = True
     on_created(key)
     client.add_labels(key, labels)
     if meta.get("head"):
-        client.add_participants(key, [client.find_user(meta["head"])])
+        head = client.find_user(meta["head"])
+        if _software(config):
+            client.add_watcher(key, head)
+        else:
+            client.add_participants(key, [head])
     client.link(key, meta["epica"], config["link_type"])
     on_ready()
     return key, created

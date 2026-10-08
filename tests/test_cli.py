@@ -193,6 +193,29 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn(PRY, err)
 
+    def test_software_canal_end_to_end(self):
+        repo, fake = ready_repo(), helpers.FakeJira()
+        path = repo / ".arq" / "config.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data.update(canal_requirente="software", helpdesk_project="PEHD", helpdesk_issue_type="Tarea")
+        path.write_text(json.dumps(data), encoding="utf-8")
+        run(repo, "triage", PRY, "--answers", ALL_NO)
+        self.assertEqual(run(repo, "jira", PRY, "--apply", fake=fake)[0], 0)
+        self.assertEqual((load(repo, PRY)[0]["jsm"], load(repo, PRY)[0]["jsm_listo"]), ("PEHD-1", "si"))
+        run(repo, "state", PRY, "--to", "esperando-info")
+        info = write(repo, "info.md", pedido_info())
+        free = write(repo, "free.md", "debate técnico")
+        code, _, err = run(repo, "jsm", PRY, "--file", free, "--internal", "--apply", fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn("épica", err)
+        run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md", "--apply", fake=fake)
+        self.assertEqual(fake.comments, [("PEHD-1", pedido_info().strip(), True)])
+        journal(repo, "jsm")({"action": "comment", "key": "PEHD-1", "public": True, "body": pedido_info().strip()})
+        code, _, err = run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md",
+                           "--apply", fake=fake)
+        self.assertEqual(code, 1)
+        self.assertIn("ya se publicó", err)
+
     def test_bad_pry_never_touches_disk(self):
         repo = helpers.make_repo()
         run(repo, "init")

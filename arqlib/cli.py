@@ -128,7 +128,7 @@ def _print_plan(plan: dict) -> None:
 
 def _jira(ctx: Context, args) -> int:
     meta, body = review.load(ctx.repo, args.pry)
-    config = cfg.load_config(ctx.repo, require_jsm=args.apply)
+    config = cfg.load_config(ctx.repo, require_canal=args.apply)
     plan = build_plan(meta, validacion=args.con_validacion)
     _print_plan(plan)
     if args.html:
@@ -169,6 +169,10 @@ def _jira(ctx: Context, args) -> int:
 
 def _jsm(ctx: Context, args) -> int:
     meta, _ = review.load(ctx.repo, args.pry)
+    software = cfg.load_config(ctx.repo).get("canal_requirente", "jsm") == "software"
+    if args.internal and software:
+        raise ValueError("el help desk no tiene notas internas (todo comentario lo ve el requirente): "
+                         "el debate técnico va en la épica ARQ")
     text = Path(args.file).read_text(encoding="utf-8").strip()
     assert_rendered(text)
     if args.public:
@@ -190,11 +194,15 @@ def _jsm(ctx: Context, args) -> int:
         print(APPLY_HINT)
         return 0
     for entry in read_entries(ctx.repo):
-        if (entry.get("action"), entry.get("key"), entry.get("public"), entry.get("body")) == (
-                "jsm-comment", meta["jsm"], args.public, text):
+        if entry.get("action") in ("jsm-comment", "comment") and (
+                entry.get("key"), entry.get("public"), entry.get("body")) == (meta["jsm"], args.public, text):
             raise ValueError(f"ya se publicó este mismo mensaje en {meta['jsm']} ({entry.get('ts', 'sin fecha')}): "
                              "no se reenvía")
-    ctx.client("jsm").comment(meta["jsm"], text, public=args.public)
+    client = ctx.client("jsm")
+    if software:
+        client.add_comment(meta["jsm"], text)
+    else:
+        client.comment(meta["jsm"], text, public=args.public)
     print(f"publicado: {kind} en {meta['jsm']}")
     return 0
 

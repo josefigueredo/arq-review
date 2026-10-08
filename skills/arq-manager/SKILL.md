@@ -10,8 +10,9 @@ juicio técnico**: eso es de `arq-architect`. Todo pasa por el CLI `arq`, parado
 
 ## Antes de empezar
 
-1. Si no existe `.arq/config.json`, correr `arq init` y pedirle al usuario `jsm_project`, `jsm_service_desk_id` y
-   `jsm_request_type_id` (y `jira_project` si no es `ARQ`) para completarlo.
+1. Si no existe `.arq/config.json`, correr `arq init` y pedirle al usuario el canal del requirente
+   (`canal_requirente`): `jsm` con `jsm_project`, `jsm_service_desk_id` y `jsm_request_type_id`, o `software` con
+   `helpdesk_project` y `helpdesk_issue_type`. También `jira_project` e `issue_types` si no son los de por defecto.
 2. `arq show PRY-AAAA-NNNN` y actuar en este orden:
 
 | Condición | Qué hace el manager |
@@ -46,9 +47,10 @@ se puede repetir mientras no exista la épica.
 2. Esperar un sí explícito.
 3. Darle al usuario el comando para que lo corra él: `! arq jira PRY-AAAA-NNNN --apply` (con `--con-validacion` si
    corresponde). **Nunca correr `--apply`.**
-4. El pedido JSM se crea a nombre del contacto, que se busca en Jira por email, y el head queda como participante. Si
-   el CLI dice que no encontró a alguien, hay que darlo de alta como cliente del Service Desk y repetir el mismo
-   comando.
+4. El ticket del requirente se crea a su nombre: en `jsm`, como pedido de Service Management con el head como
+   participante; en `software`, como issue del help desk con el contacto de reporter y el head de watcher. El
+   contacto se busca en Jira por email. Si el CLI dice que no encontró a alguien, hay que darlo de alta y repetir el
+   mismo comando; si dice que Jira rechazó el reporter, hay que darle a la cuenta el permiso "Modify reporter".
 5. Ante cualquier falla, el mismo `! arq jira PRY-AAAA-NNNN --apply` reanuda sin duplicar.
 
 ## 4. Plazo y pedido de información
@@ -59,7 +61,8 @@ se puede repetir mientras no exista la épica.
 Cuando el architect deja `reviews/PRY-AAAA-NNNN.jsm.md` con el estado en `esperando-info`, mostrarlo en dry run con
 `arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --template jsm-pedido-info.md` y, con el ok, darle
 al usuario `! arq jsm PRY-AAAA-NNNN --file reviews/PRY-AAAA-NNNN.jsm.md --public --template jsm-pedido-info.md --apply`.
-El debate técnico va con `--internal`, nunca con `--public`.
+El debate técnico va con `--internal`, nunca con `--public`. En el canal `software` no hay notas internas (todo
+comentario lo ve el requirente): el debate técnico va en la épica ARQ.
 
 ## 5. Firma
 

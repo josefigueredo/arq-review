@@ -104,6 +104,33 @@ class JiraTest(unittest.TestCase):
                                            {"update": {"labels": [{"add": "pry:2026-0028"}, {"add": "nivel:simple"}]}}))
         self.assertEqual([e["action"] for e in log], ["jsm-participants", "labels"])
 
+    def test_create_helpdesk_issue_with_reporter_and_labels(self):
+        opener, log = FakeOpener({"key": "PEHD-90"}), []
+        key = client(opener, log).create_helpdesk_issue("PEHD", "Tarea", "PRY-2026-0028 · x", "desc",
+                                                        ["pry:2026-0028", "nivel:simple"], "acc-pablo")
+        self.assertEqual(key, "PEHD-90")
+        self.assertEqual(opener.calls[0], ("POST", "https://x.atlassian.net/rest/api/2/issue", {"fields": {
+            "project": {"key": "PEHD"}, "issuetype": {"name": "Tarea"}, "summary": "PRY-2026-0028 · x",
+            "description": "desc", "labels": ["pry:2026-0028", "nivel:simple"], "reporter": {"id": "acc-pablo"}}}))
+        self.assertEqual(log[0]["action"], "helpdesk-issue")
+
+    def test_rejected_reporter_names_the_missing_permission(self):
+        error = urllib.error.HTTPError("u", 400, "Bad", {}, io.BytesIO(
+            b'{"errors":{"reporter":"Field \'reporter\' cannot be set."}}'))
+        with self.assertRaisesRegex(JiraError, "Modify reporter"):
+            client(FakeOpener(error)).create_helpdesk_issue("PEHD", "Tarea", "s", "d", [], "acc-pablo")
+
+    def test_watcher_and_plain_comment(self):
+        opener, log = FakeOpener(None, {}), []
+        jira = client(opener, log)
+        jira.add_watcher("PEHD-90", "acc-felipe")
+        jira.add_comment("PEHD-90", "hola")
+        self.assertEqual(opener.calls[0], ("POST", "https://x.atlassian.net/rest/api/2/issue/PEHD-90/watchers",
+                                           "acc-felipe"))
+        self.assertEqual(opener.calls[1], ("POST", "https://x.atlassian.net/rest/api/2/issue/PEHD-90/comment",
+                                           {"body": "hola"}))
+        self.assertEqual([(e["action"], e.get("public")) for e in log], [("watcher", None), ("comment", True)])
+
     def test_get_brief(self):
         opener = FakeOpener({"key": "ARQ-2", "fields": {"summary": "s", "parent": {"key": "ARQ-1"}}})
         self.assertEqual(client(opener).get_brief("ARQ-2"), {"key": "ARQ-2", "summary": "s", "parent": "ARQ-1"})

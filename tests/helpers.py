@@ -38,6 +38,8 @@ class FakeJira:
         self.users: Dict[str, str] = dict(USERS)
         self.hidden: Set[str] = set()  # created but not yet visible to search (eventual consistency)
         self.fail_link = False
+        self.reject_reporter = False
+        self.watchers: List[tuple] = []
 
     def search_label(self, label: str) -> List[dict]:
         return [{"key": k, "summary": i["summary"], "parent": i["parent"]}
@@ -85,3 +87,20 @@ class FakeJira:
 
     def comment(self, key: str, body: str, public: bool) -> None:
         self.comments.append((key, body, public))
+
+    def create_helpdesk_issue(self, project: str, issue_type: str, summary: str, description: str,
+                              labels: List[str], reporter: str) -> str:
+        if self.reject_reporter:
+            raise JiraError(f"Jira rechazó el reporter en {project}: darle a la cuenta el permiso Modify reporter")
+        key = f"{project}-{len(self.requests) + 1}"
+        self.requests.append(key)
+        self.issues[key] = {"summary": summary, "labels": list(labels), "type": issue_type, "parent": None,
+                            "reporter": reporter}
+        return key
+
+    def add_watcher(self, key: str, account_id: str) -> None:
+        if (key, account_id) not in self.watchers:
+            self.watchers.append((key, account_id))
+
+    def add_comment(self, key: str, body: str) -> None:
+        self.comments.append((key, body, True))

@@ -34,7 +34,7 @@ class Jira:
         self._timeout = timeout
         self._journal = journal or (lambda entry: None)
 
-    def _send(self, method: str, path: str, body: Optional[dict] = None) -> dict:
+    def _send(self, method: str, path: str, body: object = None) -> dict:
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(self.base + path, data=data, method=method, headers={
             "Authorization": f"Basic {self._auth}", "Accept": "application/json", "Content-Type": "application/json"})
@@ -115,6 +115,35 @@ class Jira:
             raise JiraError("JSM respondió el alta sin clave de pedido")
         self._journal({"action": "jsm-request", "key": key, "summary": summary})
         return key
+
+    def create_helpdesk_issue(self, project: str, issue_type: str, summary: str, description: str,
+                              labels: List[str], reporter: str) -> str:
+        """The requester's ticket in a software help desk: the requester is the reporter, never dropped (D12)."""
+        fields = {"project": {"key": project}, "issuetype": {"name": issue_type}, "summary": summary,
+                  "description": description, "labels": labels, "reporter": {"id": reporter}}
+        try:
+            key = self._send("POST", "/rest/api/2/issue", {"fields": fields}).get("key")
+        except JiraError as exc:
+            if exc.status == 400 and "reporter" in str(exc):
+                raise JiraError(f"Jira rechazó el reporter en {project}: darle a la cuenta de la API el permiso "
+                                "'Modify reporter' en ese proyecto y volver a correr. No se creó nada.",
+                                status=400) from exc
+            raise
+        if not key:
+            raise JiraError("Jira respondió el alta sin clave de issue")
+        self._journal({"action": "helpdesk-issue", "key": key, "summary": summary})
+        return key
+
+    def add_watcher(self, key: str, account_id: str) -> None:
+        check_key(key)
+        self._send("POST", f"/rest/api/2/issue/{key}/watchers", account_id)
+        self._journal({"action": "watcher", "key": key, "accountId": account_id})
+
+    def add_comment(self, key: str, body: str) -> None:
+        """A plain issue comment: in a software help desk every comment is visible to the requester."""
+        check_key(key)
+        self._send("POST", f"/rest/api/2/issue/{key}/comment", {"body": body})
+        self._journal({"action": "comment", "key": key, "public": True, "body": body})
 
     def add_participants(self, key: str, account_ids: List[str]) -> None:
         check_key(key)

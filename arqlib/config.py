@@ -7,13 +7,18 @@ from typing import List, Mapping, Tuple
 
 DEFAULT_CONFIG = {
     "jira_project": "ARQ",
+    "canal_requirente": "jsm",
     "jsm_project": "",
     "jsm_service_desk_id": "",
     "jsm_request_type_id": "",
     "issue_types": {"epic": "Epic", "story": "Story", "task": "Task", "subtask": "Subtask"},
     "link_type": "Relates",
     "timebox_dias_habiles": 10,
+    "helpdesk_project": "",
+    "helpdesk_issue_type": "",
 }
+CANALES = {"jsm": ("jsm_project", "jsm_service_desk_id", "jsm_request_type_id"),
+           "software": ("helpdesk_project", "helpdesk_issue_type")}
 _REQUIRED = ("jira_project", "issue_types", "link_type", "timebox_dias_habiles")
 _ISSUE_TYPES = ("epic", "story", "task", "subtask")
 _ENV = ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN")
@@ -40,7 +45,7 @@ def init_repo(repo: Path) -> List[str]:
     return created
 
 
-def load_config(repo: Path, require_jsm: bool = False) -> dict:
+def load_config(repo: Path, require_canal: bool = False) -> dict:
     path = config_path(repo)
     if not path.exists():
         raise ConfigError(f"falta {path}: correr `arq init` en el repo de reviews")
@@ -55,9 +60,11 @@ def load_config(repo: Path, require_jsm: bool = False) -> dict:
     if "issue_types" in data and not isinstance(types, dict):
         raise ConfigError("issue_types tiene que ser un objeto: {\"epic\": ..., \"story\": ..., ...}")
     missing += [f"issue_types.{t}" for t in _ISSUE_TYPES if not (types or {}).get(t)]
-    if require_jsm:
-        missing += [key for key in ("jsm_project", "jsm_service_desk_id", "jsm_request_type_id")
-                    if not str(data.get(key, "")).strip()]
+    canal = data.get("canal_requirente", "jsm")
+    if canal not in CANALES:
+        raise ConfigError(f"canal_requirente inválido {canal!r}: usar {' o '.join(CANALES)}")
+    if require_canal:
+        missing += [key for key in CANALES[canal] if not str(data.get(key, "")).strip()]
     if missing:
         raise ConfigError(f"faltan en {path}: {', '.join(missing)}")
     if not isinstance(data["timebox_dias_habiles"], int) or data["timebox_dias_habiles"] < 1:

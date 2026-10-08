@@ -29,8 +29,10 @@ arq jsm PRY-2026-0028 --file reviews/PRY-2026-0028.jsm.md --public --template js
 arq show PRY-2026-0028
 ```
 
-Ninguna escritura en Jira/JSM ocurre sin `--apply`, y todas quedan en `.arq/jira-writes.jsonl`. El pedido JSM se crea
-a nombre del contacto (buscado en Jira por email) con el head como participante. Las respuestas públicas tienen que
+Ninguna escritura en Jira/JSM ocurre sin `--apply`, y todas quedan en `.arq/jira-writes.jsonl`. El ticket del
+requirente se crea a nombre del contacto (buscado en Jira por email), según `canal_requirente`: un pedido JSM con el
+head como participante, o un issue en un proyecto de Software usado como help desk (por ejemplo PEHD) con el contacto
+como reporter y el head como watcher. Las respuestas públicas tienen que
 seguir una plantilla `jsm-*.md` y respetar el estado del pedido. Nada aprueba ni rechaza en la plataforma PRY: eso lo
 hace una persona.
 

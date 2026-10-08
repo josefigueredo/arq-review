@@ -40,6 +40,7 @@ versionado en git. Ninguna decisión depende de chats por fuera del registro, y 
 | D10 | Dos skills de rol (`arq-manager`, `arq-architect`) sobre un **contrato compartido** y scripts determinísticos. Ninguna skill invoca a la otra; el estado vive en el archivo del review. | Separar el juicio técnico de la orquestación sin duplicar reglas. |
 | D11 | La herramienta (`arq-review`) y los datos (repo de reviews del equipo) son repos separados. | Que cada revisión no ensucie el historial de la herramienta, y que la herramienta sirva a más de un equipo. |
 | D12 | El pedido JSM se crea **a nombre del requirente** (`raiseOnBehalfOf`), buscado en Jira por el email que trae la plataforma, con el head como participante. Si no existe en Jira, o si Jira oculta su email y no se puede confirmar la identidad, no se crea nada. | Si lo crea el usuario de la API, el requirente nunca recibe notificaciones y D5 no sirve. Nunca se crea un ticket a nombre de otra persona. |
+| D14 | El canal del requirente es configurable (`canal_requirente`): `jsm` (pedido de Service Management, `raiseOnBehalfOf`, participantes, notas internas) o `software` (issue en un proyecto de Software usado como help desk, hoy PEHD con tipo `Tarea`: el requirente es el *reporter*, el head es *watcher*, todo comentario es público y no hay notas internas; el debate técnico va en la épica). Si Jira rechaza el reporter, no se crea nada. | ACME no tiene un JSM de Arquitectura; los requirentes tienen licencia de Jira y ya trabajan con PEHD. El análisis y las guardas no cambian: solo el adaptador hacia Jira. |
 | D13 | Lo público tiene doble guarda: el texto tiene que seguir una plantilla `jsm-*.md` y el pedido tiene que estar en el estado de esa plantilla. | Que nunca salga una devolución antes de la firma ni un texto libre al requirente. |
 
 ## 3. Supuestos no verificados
@@ -83,8 +84,9 @@ Repo de reviews del equipo (cualquier ruta; el CLI trabaja sobre el cwd):
 
 ```
 <repo-reviews>/
-├── .arq/config.json            # jira_project, jsm_project, jsm_service_desk_id, jsm_request_type_id,
-│                               # issue_types, link_type, timebox_dias_habiles
+├── .arq/config.json            # jira_project, issue_types, link_type, timebox_dias_habiles, canal_requirente,
+│                               # jsm_project/jsm_service_desk_id/jsm_request_type_id (canal jsm) o
+│                               # helpdesk_project/helpdesk_issue_type (canal software)
 ├── .arq/jira-writes.jsonl      # journal de escrituras
 ├── reviews/PRY-2026-0028.md    # frontmatter de estado + análisis
 ├── reviews/PRY-2026-0028.jsm.md         # borrador del mensaje JSM (lo redacta el architect)

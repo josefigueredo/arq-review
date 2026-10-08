@@ -107,6 +107,7 @@ class ApplyTest(unittest.TestCase):
 
 
 LABELS = ["pry:2026-0028", "nivel:simple"]
+SOFT = dict(DEFAULT_CONFIG, canal_requirente="software", helpdesk_project="PEHD", helpdesk_issue_type="Tarea")
 CONFIG = dict(DEFAULT_CONFIG, jsm_project="JSM", jsm_service_desk_id="3", jsm_request_type_id="41")
 
 
@@ -167,6 +168,39 @@ class EnsureRequestTest(unittest.TestCase):
         jira.create_request("3", "41", "PRY-2026-0028 · PoC", "d")  # creado, pero sin labels todavía
         (key, created), _, _ = self.call(jira, request_meta(), known_jsm=["JSM-1"])
         self.assertEqual((key, created, jira.requests), ("JSM-1", False, ["JSM-1"]))
+
+    def soft(self, jira, meta, known_jsm=()):
+        saved, ready = [], []
+        result = ensure_request(meta, jira, SOFT, "desc", LABELS, saved.append, lambda: ready.append(True),
+                                known_jsm=known_jsm)
+        return result, saved, ready
+
+    def test_software_canal_creates_helpdesk_issue_with_reporter_watcher_and_link(self):
+        jira = helpers.FakeJira()
+        (key, created), saved, ready = self.soft(jira, request_meta())
+        self.assertEqual((key, created, saved, ready), ("PEHD-1", True, ["PEHD-1"], [True]))
+        self.assertEqual(jira.issues["PEHD-1"]["reporter"], "acc-pablo")
+        self.assertEqual(jira.issues["PEHD-1"]["type"], "Tarea")
+        self.assertEqual(jira.issues["PEHD-1"]["labels"], LABELS)
+        self.assertEqual(jira.watchers, [("PEHD-1", "acc-felipe")])
+        self.assertEqual((jira.participants, jira.links), ([], [("PEHD-1", "ARQ-1", "Relates")]))
+
+    def test_software_canal_rejected_reporter_creates_nothing(self):
+        jira = helpers.FakeJira()
+        jira.reject_reporter = True
+        with self.assertRaisesRegex(JiraError, "Modify reporter"):
+            self.soft(jira, request_meta())
+        self.assertEqual(jira.requests, [])
+
+    def test_software_canal_finds_existing_ticket_by_label(self):
+        jira = helpers.FakeJira()
+        jira.create_helpdesk_issue("PEHD", "Tarea", "PRY-2026-0028 · PoC", "d", LABELS, "acc-pablo")
+        (key, created), _, _ = self.soft(jira, request_meta())
+        self.assertEqual((key, created, jira.requests), ("PEHD-1", False, ["PEHD-1"]))
+
+    def test_known_from_journal_reads_helpdesk_issues(self):
+        entries = [{"action": "helpdesk-issue", "key": "PEHD-7", "summary": "PRY-2026-0028 · PoC"}]
+        self.assertEqual(known_from_journal(entries, "pry:2026-0028", "PRY-2026-0028")[1], ["PEHD-7"])
 
     def test_without_head_there_are_no_participants(self):
         jira = helpers.FakeJira()
