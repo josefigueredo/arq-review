@@ -116,7 +116,7 @@ sequenceDiagram
 
     rect rgba(190, 140, 210, 0.12)
         Note over Firma,PEHD: Decisión (sub-tasks "Revisión y firma" y "Publicar devolución")
-        Firma->>Git: revisa reviews/PRY.md
+        Firma->>Git: revisa reviews/PRY-2026-0028.md
         Firma->>CLI: arq set firmante · arq state --to publicado
         CLI->>Git: estado publicado
         EM->>CLI: arq jsm --public --template jsm-devolucion --apply
