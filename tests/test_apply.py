@@ -84,6 +84,21 @@ class ApplyTest(unittest.TestCase):
         again = sync_progress(jira, "pry:2026-0028", nodes, {"revision/triage"})
         self.assertEqual(again["moved"], [])  # ya estaba en done: no se toca
 
+    def test_sync_progress_starts_the_active_task_only_from_todo(self):
+        jira = helpers.FakeJira()
+        nodes = apply_plan(plan(), jira, "ARQ", TYPES)["nodes"]
+        jira.issues[nodes["revision"]]["no_progress"] = True
+        result = sync_progress(jira, "pry:2026-0028", nodes, {"revision/triage"},
+                               active={"revision/gap-check", "revision", "epica"})
+        self.assertEqual(result["started"], [nodes["revision/gap-check"], nodes["epica"]])
+        self.assertEqual(result["blocked_start"], [nodes["revision"]])
+        self.assertEqual(jira.issues[nodes["revision/gap-check"]]["category"], "in_progress")
+        jira.issues[nodes["revision/triage"]].update(category="todo")  # alguien la reabrió a mano
+        again = sync_progress(jira, "pry:2026-0028", nodes, set(), active={"revision/gap-check", "revision/triage"})
+        self.assertEqual(again["started"], [nodes["revision/triage"]])
+        jira.issues[nodes["epica"]].update(category="done")
+        self.assertEqual(sync_progress(jira, "pry:2026-0028", nodes, set(), active={"epica"})["started"], [])
+
     def test_renamed_issue_is_not_duplicated(self):
         jira = helpers.FakeJira()
         apply_plan(plan(), jira, "ARQ", TYPES)

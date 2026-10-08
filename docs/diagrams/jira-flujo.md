@@ -62,7 +62,7 @@ flowchart LR
 Camino feliz de PRY-2026-0028, desde que entra a la plataforma PRY hasta un cierre con "aprobar con condiciones".
 Hasta el paso de la respuesta de Juan Pablo ya ocurrió (datos reales); lo posterior es ilustrativo.
 Cada `--apply` lo corre una persona; cada paso que cambia el review se commitea en `arq-reviews`. Cada `arq jira --apply`
-pasa además a Done las tareas de PLATE que el review ya da por cumplidas.
+pasa además a Done las tareas de PLATE que el review ya da por cumplidas, y a En curso la siguiente.
 
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 210, "actorMargin": 130, "messageMargin": 42, "boxMargin": 12, "noteMargin": 12}}}%%

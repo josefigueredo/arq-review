@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 import helpers  # noqa: F401
-from arqlib.progress import done_nodes
+from arqlib.progress import active_nodes, done_nodes
 from arqlib.structure import build_plan
 
 
@@ -57,6 +57,31 @@ class ProgressTest(unittest.TestCase):
         done = done_nodes(m, plan(m), info_published=True)
         self.assertTrue({"revision/triage", "revision/gap-check", "revision/analisis", "revision/firma"} <= done)
         self.assertFalse({"revision/publicar", "revision", "epica"} & done)
+
+
+class ActiveTest(unittest.TestCase):
+    def active(self, m, published=True):
+        p = plan(m)
+        return active_nodes(m, p, done_nodes(m, p, info_published=published))
+
+    def test_first_unfinished_task_its_story_and_the_epic(self):
+        self.assertEqual(self.active(meta("esperando-info"), published=False),
+                         {"analisis/gap-check", "analisis", "epica"})
+        self.assertEqual(self.active(meta("esperando-info")), {"analisis/constraints", "analisis", "epica"})
+
+    def test_optional_validation_never_holds_the_flow(self):
+        self.assertEqual(self.active(meta("en-firma")), {"decision/firma", "decision", "epica"})
+
+    def test_ticket_not_ready_keeps_intake_active(self):
+        self.assertEqual(self.active(meta("triado", jsm_listo="")), {"intake/abrir-ticket", "intake", "epica"})
+
+    def test_simple_level(self):
+        self.assertEqual(self.active(meta("triado", nivel="simple"), published=False),
+                         {"revision/gap-check", "revision", "epica"})
+
+    def test_closed_has_nothing_active(self):
+        self.assertEqual(self.active(meta("cerrado", veredicto="aprobar")), set())
+        self.assertEqual(self.active(meta("cerrado", resultado="rechazado")), set())
 
 
 if __name__ == "__main__":

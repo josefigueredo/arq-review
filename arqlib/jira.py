@@ -67,13 +67,19 @@ class Jira:
 
     def transition_done(self, key: str) -> Optional[str]:
         """Move the issue to a status of the "done" category; None when its workflow offers none from here."""
+        return self._transition(key, "done", r"done|hecho|finaliz|complet|resuel")
+
+    def transition_in_progress(self, key: str) -> Optional[str]:
+        """Move the issue to a status of the "in progress" category; None when its workflow offers none from here."""
+        return self._transition(key, "indeterminate", r"curso|progres|procesando|doing")
+
+    def _transition(self, key: str, category: str, preferred: str) -> Optional[str]:
         check_key(key)
         transitions = self._send("GET", f"/rest/api/2/issue/{key}/transitions").get("transitions", [])
-        done = [t for t in transitions if ((t.get("to") or {}).get("statusCategory") or {}).get("key") == "done"]
-        if not done:
+        found = [t for t in transitions if ((t.get("to") or {}).get("statusCategory") or {}).get("key") == category]
+        if not found:
             return None
-        pick = next((t for t in done if re.search(r"done|hecho|finaliz|complet|resuel", t["to"].get("name", ""), re.I)),
-                    done[0])
+        pick = next((t for t in found if re.search(preferred, t["to"].get("name", ""), re.I)), found[0])
         self._send("POST", f"/rest/api/2/issue/{key}/transitions", {"transition": {"id": pick["id"]}})
         self._journal({"action": "transition", "key": key, "to": pick["to"].get("name")})
         return pick["to"].get("name")

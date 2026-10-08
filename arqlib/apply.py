@@ -6,7 +6,7 @@ confirmed one by one, because Jira Cloud's search/jql is eventually consistent a
 from __future__ import annotations
 
 import hashlib
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 NODE_PROPERTY = "arq.node"
@@ -121,17 +121,24 @@ def apply_plan(plan: dict, client, project: str, issue_types: Dict[str, str],
             "nodes": dict(ensure.index.by_node)}
 
 
-def sync_progress(client, label: str, nodes: Dict[str, str], done: set) -> Dict[str, List[str]]:
-    """Move to Done every finished issue that is not there yet; leaves first, the epic last. Never moves back."""
+def sync_progress(client, label: str, nodes: Dict[str, str], done: set,
+                  active: Iterable[str] = ()) -> Dict[str, List[str]]:
+    """Move to Done every finished issue that is not there yet (leaves first, the epic last), then start the active
+    ones that are still to do. Never moves back."""
     category = {issue["key"]: issue.get("category") for issue in client.search_board(label)}
-    moved: List[str] = []
-    blocked: List[str] = []
+    result: Dict[str, List[str]] = {"moved": [], "blocked": [], "started": [], "blocked_start": []}
     for node in sorted(done, key=lambda n: (n == "epica", -n.count("/"))):
         key = nodes.get(node)
         if not key or category.get(key) == "done":
             continue
-        (moved if client.transition_done(key) else blocked).append(key)
-    return {"moved": moved, "blocked": blocked}
+        (result["moved"] if client.transition_done(key) else result["blocked"]).append(key)
+        category[key] = "done"
+    for node in sorted(active, key=lambda n: (n == "epica", -n.count("/"))):
+        key = nodes.get(node)
+        if not key or category.get(key, "todo") != "todo":
+            continue
+        (result["started"] if client.transition_in_progress(key) else result["blocked_start"]).append(key)
+    return result
 
 
 def sync_epic(client, key: str, epic: dict) -> None:

@@ -1,7 +1,7 @@
-"""Which issues are finished, derived from the review (spec D16). Pure: never talks to Jira.
+"""Which issues are finished and which one is under way, derived from the review (spec D16). Pure: never talks to Jira.
 
-The rules mirror each task's "Terminado cuando". arq only ever moves issues forward to Done: what a person closed by
-hand stays closed, and nothing is reopened.
+The rules mirror each task's "Terminado cuando". arq only ever moves issues forward: what a person closed by hand
+stays closed, and nothing is reopened.
 """
 from __future__ import annotations
 
@@ -43,3 +43,19 @@ def done_nodes(meta: Dict[str, str], plan: dict, info_published: bool) -> Set[st
     if closed:
         done.add("epica")
     return done
+
+
+def active_nodes(meta: Dict[str, str], plan: dict, done: Set[str]) -> Set[str]:
+    """The first unfinished task in execution order, its story and the epic: what goes to "en curso".
+
+    The optional technical validation is skipped: nothing in the review marks it finished, so it would hold the flow.
+    """
+    if meta.get("estado") == "cerrado":
+        return set()
+    for item in plan["items"]:
+        if item["node"] == "validacion":
+            continue
+        for sub in item["subtasks"]:
+            if sub["node"] not in done:
+                return {sub["node"], item["node"], "epica"}
+    return set()

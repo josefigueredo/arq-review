@@ -182,6 +182,15 @@ class JiraTest(unittest.TestCase):
                                                                             "statusCategory": {"key": "new"}}}]})
         self.assertIsNone(client(opener).transition_done("PLATE-616"))
 
+    def test_transition_in_progress_picks_the_indeterminate_category(self):
+        opener, log = FakeOpener({"transitions": [
+            {"id": "21", "name": "Bloqueado", "to": {"name": "Bloqueado", "statusCategory": {"key": "indeterminate"}}},
+            {"id": "11", "name": "PROCESANDO", "to": {"name": "PROCESANDO", "statusCategory": {"key": "indeterminate"}}},
+            {"id": "31", "name": "Done", "to": {"name": "Done", "statusCategory": {"key": "done"}}}]}, None), []
+        self.assertEqual(client(opener, log).transition_in_progress("PLATE-621"), "PROCESANDO")
+        self.assertEqual(opener.calls[1][2], {"transition": {"id": "11"}})
+        self.assertEqual(log[0], {"action": "transition", "key": "PLATE-621", "to": "PROCESANDO"})
+
     def test_get_brief(self):
         opener = FakeOpener({"key": "ARQ-2", "fields": {"summary": "s", "parent": {"key": "ARQ-1"}}})
         self.assertEqual(client(opener).get_brief("ARQ-2"), {"key": "ARQ-2", "summary": "s", "parent": "ARQ-1"})

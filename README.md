@@ -89,7 +89,7 @@ Con `"canal_requirente": "jsm"` se usan en cambio `jsm_project`, `jsm_service_de
   devolución nunca sale antes de la firma) y no se publica dos veces el mismo mensaje.
 - **La firma queda atada al veredicto:** se firma solo en `en-firma`; reabrir el análisis la anula.
 - **El tablero avanza solo.** Cada `arq jira PRY --apply` pasa a Done las tareas que el review ya da por cumplidas
-  (nunca reabre nada); `arq ver` las muestra con ✔.
+  y a En curso la siguiente, con su historia y la épica (nunca reabre nada); `arq ver` las muestra con ✔ y ◐.
 - **Jira es un espejo del review.** La épica muestra el resumen del análisis y cada tarea dice qué hacer y cuándo
   está terminada. Cada `arq jira PRY --apply` reescribe las descripciones que cambiaron: **no editarlas a mano** (se
   pisan); las notas van en comentarios y los responsables no se tocan.

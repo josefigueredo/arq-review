@@ -75,6 +75,12 @@ class FakeJira:
         self.issues[key].update(status="Done", category="done")
         return "Done"
 
+    def transition_in_progress(self, key: str) -> Optional[str]:
+        if self.issues[key].get("no_progress"):
+            return None
+        self.issues[key].update(status="En curso", category="in_progress")
+        return "En curso"
+
     def update_description(self, key: str, text: str) -> None:
         self.issues[key]["description"] = text
 
