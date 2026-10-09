@@ -13,6 +13,10 @@ MAX_DESCRIPTION = 30000  # Jira rejects descriptions over 32767 characters
 SECTIONS = ("Lo que entendimos", "Input faltante", "Análisis preliminar (sin veredicto)", "Evaluación por componente",
             "Opciones consideradas", "Decisión", "Recomendación", "Condiciones", "Consecuencias",
             "Señales para otros sectores (sin veredicto)", "Veredicto propuesto", "Pedido original")
+# When the description does not fit, these long sections are cut first, in this order and at a line boundary, so
+# what other sectors read in Jira (signals, conditions, verdict, the original request) always survives.
+TRIM_ORDER = ("Análisis preliminar (sin veredicto)", "Opciones consideradas", "Evaluación por componente",
+              "Consecuencias")
 
 
 def _inline(text: str) -> str:
@@ -91,9 +95,30 @@ def render_epic(meta: Dict[str, str], body: str) -> str:
     footer = (f"----\n_Generado por arq desde reviews/{pry}.md, la fuente de verdad. Esta descripción se regenera "
               f"en cada `arq jira {pry} --apply`: para notas, usar comentarios._").replace("`", "")
     sections = _sections(body)
-    parts = [md_to_wiki(f"## {title}\n\n{sections[title]}") for title in SECTIONS if title in sections]
-    text = "\n".join(head) + ("\n\n" + "\n\n".join(parts) if parts else "") + "\n\n" + footer
+    titles = [title for title in SECTIONS if title in sections]
+    parts = {title: md_to_wiki(f"## {title}\n\n{sections[title]}") for title in titles}
+
+    def build() -> str:
+        return "\n".join(head) + ("\n\n" + "\n\n".join(parts[t] for t in titles) if titles else "") + "\n\n" + footer
+
+    text = build()
+    note = f"_(recortado: el análisis completo está en reviews/{pry}.md)_"
+    for title in TRIM_ORDER:
+        if len(text) <= MAX_DESCRIPTION:
+            return text
+        if title not in parts:
+            continue
+        heading, *lines = parts[title].split("\n")
+        room = len(parts[title]) - (len(text) - MAX_DESCRIPTION) - len(note) - 2 - len(heading)
+        kept: List[str] = []
+        for line in lines:
+            if len(line) + 1 > room:
+                break
+            kept.append(line)
+            room -= len(line) + 1
+        parts[title] = "\n".join([heading, *kept, "", note])
+        text = build()
     if len(text) <= MAX_DESCRIPTION:
         return text
-    cut = f"\n\n_(recortado: el análisis completo está en reviews/{pry}.md)_\n\n{footer}"
+    cut = f"\n\n{note}\n\n{footer}"
     return text[:MAX_DESCRIPTION - len(cut)] + cut

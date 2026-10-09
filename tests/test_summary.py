@@ -67,6 +67,21 @@ class SummaryTest(unittest.TestCase):
         self.assertLessEqual(len(text), MAX_DESCRIPTION)
         self.assertIn("(recortado: el análisis completo está en reviews/PRY-2026-0026.md)", text)
 
+    def test_long_analysis_is_cut_so_signals_and_original_request_survive(self):
+        analysis = "\n".join(f"- Hallazgo {i}: " + "detalle " * 12 for i in range(800))
+        body = ("## Lo que entendimos\n\nMover PB.\n\n## Análisis preliminar (sin veredicto)\n\n" + analysis +
+                "\n\n## Señales para otros sectores (sin veredicto)\n\n- ⚠ Cloud podría observar: cuotas.\n\n"
+                "## Pedido original\n\n- Tipo: Migración\n")
+        text = render_epic(META, body)
+        self.assertLessEqual(len(text), MAX_DESCRIPTION)
+        self.assertIn("h3. Señales para otros sectores (sin veredicto)", text)
+        self.assertIn("Cloud podría observar: cuotas.", text)
+        self.assertIn("h3. Pedido original", text)
+        note = "(recortado: el análisis completo está en reviews/PRY-2026-0026.md)"
+        self.assertLess(text.index(note), text.index("h3. Señales para otros sectores"))  # the cut is inside the analysis
+        kept = text[text.index("h3. Análisis preliminar"):text.index(note)].rstrip("_\n").split("\n")
+        self.assertTrue(kept[-1].rstrip().endswith("detalle"), kept[-1][-40:])  # whole lines only, never half a finding
+
 
 if __name__ == "__main__":
     unittest.main()
