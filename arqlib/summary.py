@@ -42,6 +42,11 @@ def _unwrap(markdown: str) -> List[str]:
     return lines
 
 
+def unwrap(text: str) -> str:
+    """The text with hard-wrapped lines joined, for anything Jira shows: comments as well as descriptions."""
+    return "\n".join(_unwrap(text))
+
+
 def md_to_wiki(markdown: str) -> str:
     out: List[str] = []
     header_row = True

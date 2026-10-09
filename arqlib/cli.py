@@ -18,6 +18,7 @@ from arqlib.evaluate import evaluate_files
 from arqlib.jira import Jira, JiraError, check_key
 from arqlib.journal import journal, read_entries
 from arqlib.paths import CONTRACT
+from arqlib.summary import unwrap
 from arqlib.preview import render_html
 from arqlib.render import assert_rendered, load_template, matches_template
 from arqlib.structure import base_labels, build_plan, followup_plan, pry_label
@@ -202,14 +203,16 @@ def _jsm(ctx: Context, args) -> int:
     if not meta.get("jsm"):
         raise ValueError(f"{args.pry} no tiene pedido JSM: correr `arq jira {args.pry} --apply` primero")
     check_key(meta["jsm"])
+    # Jira shows every newline inside a paragraph as a visible break: send whole paragraphs and bullets.
+    text = unwrap(text)
     kind = "respuesta pública al requirente" if args.public else "nota interna"
     print(f"{kind} en {meta['jsm']}:\n\n{text}\n")
     if not args.apply:
         print(APPLY_HINT)
         return 0
     for entry in read_entries(ctx.repo):
-        if entry.get("action") in ("jsm-comment", "comment") and (
-                entry.get("key"), entry.get("public"), entry.get("body")) == (meta["jsm"], args.public, text):
+        sent = (entry.get("key"), entry.get("public"), unwrap(entry.get("body") or ""))
+        if entry.get("action") in ("jsm-comment", "comment") and sent == (meta["jsm"], args.public, text):
             raise ValueError(f"ya se publicó este mismo mensaje en {meta['jsm']} ({entry.get('ts', 'sin fecha')}): "
                              "no se reenvía")
     client = ctx.client("jsm")

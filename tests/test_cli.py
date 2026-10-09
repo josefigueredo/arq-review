@@ -11,6 +11,7 @@ from arqlib.cli import main
 from arqlib.journal import journal
 from arqlib.render import load_template, render
 from arqlib.review import load
+from arqlib.summary import unwrap
 
 ALL_NO = ("multi_cuenta=no,migracion=no,fecha_comprometida=no,otros_equipos=no,"
           "datos_sensibles_o_ia=no,larga_o_productiva=no")
@@ -183,6 +184,30 @@ class CliTest(unittest.TestCase):
         self.assertEqual((code, fake.comments), (1, []))
         self.assertIn("ya se publicó", err)
 
+    def test_reply_is_sent_without_hard_line_breaks(self):
+        fake = helpers.FakeJira()
+        repo = opened_repo(fake)
+        run(repo, "state", PRY, "--to", "esperando-info")
+        wrapped = pedido_info().replace("- Fecha de baja",
+                                        "- Fecha de baja: ¿cuándo se apaga\n  la instancia?\n- Dueño")
+        info = write(repo, "info.md", wrapped)
+        run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md", "--apply", fake=fake)
+        body = fake.comments[0][1]
+        self.assertIn("- Fecha de baja: ¿cuándo se apaga la instancia?\n- Dueño", body)  # bullets stay, wraps go
+        self.assertIn("si para esa fecha no tenemos la información", body)  # the template's own wrap is joined too
+        self.assertIn("\n\nEquipo de Arquitectura", body)  # paragraphs stay apart
+
+    def test_reply_published_with_line_breaks_is_not_resent_unwrapped(self):
+        fake = helpers.FakeJira()
+        repo = opened_repo(fake)
+        run(repo, "state", PRY, "--to", "esperando-info")
+        info = write(repo, "info.md", pedido_info())
+        journal(repo, "jsm")({"action": "comment", "key": "JSM-1", "public": True, "body": pedido_info().strip()})
+        code, _, err = run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md", "--apply",
+                           fake=fake)
+        self.assertEqual((code, fake.comments), (1, []))
+        self.assertIn("ya se publicó", err)
+
     def test_public_reply_must_name_this_request(self):
         fake = helpers.FakeJira()
         repo = opened_repo(fake)
@@ -209,7 +234,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("épica", err)
         run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md", "--apply", fake=fake)
-        self.assertEqual(fake.comments, [("PEHD-1", pedido_info().strip(), True)])
+        self.assertEqual(fake.comments, [("PEHD-1", unwrap(pedido_info().strip()), True)])
         journal(repo, "jsm")({"action": "comment", "key": "PEHD-1", "public": True, "body": pedido_info().strip()})
         code, _, err = run(repo, "jsm", PRY, "--file", info, "--public", "--template", "jsm-pedido-info.md",
                            "--apply", fake=fake)
