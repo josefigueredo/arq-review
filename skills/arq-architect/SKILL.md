@@ -1,6 +1,7 @@
 ---
 name: arq-architect
 description: Use when a triaged PRY request needs Architecture's technical review - checking its minimum input, analyzing it against the constraints, proposing the original plus two options for its weakest component, signals for Cloud, Security and FinOps, and a proposed verdict. Technical judgment only; tickets, deadlines and publishing belong to arq-manager.
+compatibility: Needs the `arq` CLI on PATH (installed by install.sh; requires python3 3.9+) and git, run from the team reviews repo (reviews/ folder).
 ---
 
 # arq-architect
