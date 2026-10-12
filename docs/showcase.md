@@ -106,7 +106,11 @@ cuarta historia, «Validación técnica».
 
 ### La vista previa
 
-La página `vista.html` es una sola, sin recursos externos: la épica y cada historia con su descripción.
+La página `vista.html` es una sola, sin recursos externos: la épica y cada historia con su descripción. Las marcas
+de Jira más comunes (`{{código}}`, `*negrita*`, `_cursiva_`) se muestran con formato, como las vería Jira. Es solo la vista:
+lo que se crea en Jira es el mismo texto de siempre. Siguen sin dibujarse los títulos `h3.`, las rayas `----` y las tablas
+wiki (se ven como texto, como en la épica de la captura), y los saltos de línea de las descripciones no se conservan en
+la página.
 
 ![Recorte de la vista previa de la épica](img/preview-epica.png)
 
