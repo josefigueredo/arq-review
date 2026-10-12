@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;background:#cfd3e6;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif}
+.win{margin:22px;border-radius:12px;overflow:hidden;box-shadow:0 18px 50px rgba(20,20,40,.35),0 0 0 1px rgba(0,0,0,.25)}
+.bar{height:38px;background:#2b2b31;display:flex;align-items:center;padding:0 14px;position:relative}
+.dots span{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px}
+.dots .r{background:#ff5f57}.dots .y{background:#febc2e}.dots .g{background:#28c840}
+.ttl{position:absolute;left:0;right:0;text-align:center;color:#a9a9b3;font-size:13px}
+.term{background:#16161a;color:#e6e6ea;font:13.5px/1.5 Menlo,Monaco,monospace;padding:14px 18px 18px;white-space:pre}
+.p{color:#7ee787}.c{color:#7d8590}.o{color:#e6e6ea}.k{color:#79c0ff}</style><div class="win" style="width:1196px"><div class="bar"><div class="dots"><span class="r"></span><span class="y"></span><span class="g"></span></div><div class="ttl">zsh — ~/arq-reviews</div></div><div class="term"><span class="c"># el pedido sigue esperando información: no se puede pasar a firma</span>
+<span class="p">$</span> <span class="k">arq state PRY-2026-0001 --to en-firma</span>
+<span class="o">error: transición inválida: esperando-info → en-firma; válidas: en-analisis, propuesta-rechazo</span>
+<span class="c"># un mensaje público que no sigue la plantilla</span>
+<span class="p">$</span> <span class="k">arq jsm PRY-2026-0001 --file reviews/mal.md --public --template jsm-pedido-info.md</span>
+<span class="o">error: el texto no sigue la plantilla jsm-pedido-info.md: redactarlo desde ella</span>
+<span class="c"># el canal software no tiene notas internas</span>
+<span class="p">$</span> <span class="k">arq jsm PRY-2026-0001 --file reviews/mal.md --internal</span>
+<span class="o">error: el help desk no tiene notas internas (todo comentario lo ve el requirente): el debate técnico va en la épica ARQ</span>
+<span class="c"># publicar sin que nadie firme</span>
+<span class="p">$</span> <span class="k">arq state PRY-2026-0001 --to publicado</span>
+<span class="o">error: no se puede publicar sin firmante: una persona tiene que firmar la revisión</span>
+<span class="c"># cerrar con un resultado que no corresponde al veredicto</span>
+<span class="p">$</span> <span class="k">arq state PRY-2026-0001 --to cerrado --resultado rechazado</span>
+<span class="o">error: el veredicto &#x27;aprobar-con-condiciones&#x27; se cierra como &#x27;condicionado&#x27;, no como &#x27;rechazado&#x27;</span>
+<span class="c"># escribir en Jira sin credenciales en el entorno</span>
+<span class="p">$</span> <span class="k">arq jira PRY-2026-0001 --apply</span>
+<span class="o">error: faltan variables de entorno: JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN</span></div></div>

@@ -1,108 +1,71 @@
 # arq-review
 
-Revisión de Arquitectura de pedidos `PRY-AAAA-NNNN` de la plataforma de requerimientos: input mínimo, análisis contra
-constraints, propuesta original + 2 opciones para el componente más débil, señales para Cloud/Seguridad/FinOps y
-veredicto propuesto. Jira es el sistema de registro (una épica por pedido y un ticket donde conversa el requirente); el
-análisis vive en git.
+Dos skills para Claude Code, Codex y Cursor, y un CLI (`arq`), para llevar la revisión de Arquitectura de los pedidos
+`PRY-AAAA-NNNN` de punta a punta: desde que llega el pedido hasta la devolución firmada. Cada una responde a algo
+distinto que le pedís al agente:
 
-- Diseño: `docs/superpowers/specs/2026-10-07-arq-review-design.md` (decisiones D1–D16, lecciones de la primera corrida)
-- Skills: `arq-manager` (coordinación) y `arq-architect` (juicio técnico)
-- Contrato (lo mantiene Arquitectura): `contract/` — `constraints.md`, `triage.md`, `minimum-input.md`, `templates/`
-- Guía para agentes que modifican este repo: `AGENTS.md`
-- Diagramas de los boards de Jira y de la secuencia completa: `docs/diagrams/jira-flujo.md`
-- Presentación para público no técnico (HTML autocontenido): `docs/presentacion/revision-arquitectura.html`
-- Presentación para quien opera el proceso desde su agente de código (Claude Code, Codex o Cursor): `docs/presentacion/seguimiento-agente.html`
-- Guías para alguien nuevo en el proceso: `docs/guias/flujo-manual.md` (todo a mano, para entender y validar el flujo) y
-  `docs/guias/flujo-con-agente.md` (lo mismo con el agente y las skills)
-  Cada una tiene su versión HTML autocontenida al lado (`.html`); se regeneran con `docs/guias/build/build.sh`
-  (necesita `pandoc` y `mmdc`).
-
-## Instalar
-
-```bash
-./install.sh            # skills en ~/.claude, ~/.codex y ~/.agents (Cursor); CLI en ~/.local/bin/arq
-```
-
-Las escrituras en Jira necesitan `JIRA_BASE_URL` (https), `JIRA_EMAIL` y `JIRA_API_TOKEN` en el entorno. Por ejemplo,
-cargándolas desde un `.env` existente en la misma línea del comando:
-
-```bash
-set -a && source <ruta>/.env && set +a && arq jira PRY-2026-0028 --apply
-```
-
-## Repo de reviews del equipo
-
-`arq` trabaja sobre el directorio actual, que es el repo de reviews (separado de esta herramienta):
-
-```
-<repo-reviews>/
-├── .arq/config.json            # ver abajo
-├── .arq/jira-writes.jsonl      # journal de cada escritura en Jira (se commitea)
-└── reviews/
-    ├── PRY-2026-0028.md        # frontmatter de estado + análisis
-    ├── PRY-2026-0028.jsm.md    # mensaje al requirente (lo redacta arq-architect)
-    └── PRY-2026-0028.comentario.md  # comentario corto para la plataforma PRY
-iniciativas/
-└── PRY-2026-0028/              # submódulo git con remote propio: material que se comparte con el equipo del pedido
-```
-
-`.arq/config.json`, tal como se usa en ACME (canal `software`: el requirente conversa en un proyecto de Software usado
-como help desk):
-
-```json
-{
-  "jira_project": "PLATE",
-  "issue_types": {"epic": "Epic", "story": "Story (migrated)", "task": "Tarea", "subtask": "Subtarea"},
-  "link_type": "Relates",
-  "timebox_dias_habiles": 10,
-  "canal_requirente": "software",
-  "helpdesk_project": "PEHD",
-  "helpdesk_issue_type": "Tarea"
-}
-```
-
-Con `"canal_requirente": "jsm"` se usan en cambio `jsm_project`, `jsm_service_desk_id` y `jsm_request_type_id`.
-
-## Comandos
-
-| Comando | Qué hace |
+| Le decís al agente… | Y la skill… |
 |---|---|
-| `arq init` | crea `.arq/config.json` y `reviews/` |
-| `arq path` · `arq lint` | carpeta del contrato · valida `constraints.md` |
-| `arq new PRY --nombre N --pedido F --contacto EMAIL [--head EMAIL]` | registra un pedido (`recibido`) |
-| `arq show PRY` | muestra el estado del review (local) |
-| `arq ver PRY [--sin-links]` | solo lectura en Jira: ticket del requirente y árbol de la épica con el estado, el responsable y el avance de cada issue; las claves son links clickeables en la terminal (OSC 8) |
-| `arq triage PRY --answers "id=si,..."` | nivel `simple`/`complejo`; se puede repetir hasta crear la épica |
-| `arq jira PRY [--html F] [--con-validacion] [--apply]` | épica, historias y sub-tasks + ticket del requirente, linkeados |
-| `arq timebox PRY [--today AAAA-MM-DD]` | arranca o consulta el plazo |
-| `arq set PRY campo=valor ...` | `faltantes`, `componente_debil`, `senales`, `veredicto`, `firmante` |
-| `arq state PRY --to ESTADO [--resultado R]` | cambia de estado (con guardas) |
-| `arq jsm PRY --file F (--public --template T \| --internal) [--apply]` | comenta en el ticket del requirente |
-| `arq seguimiento PRY "condición" ... [--apply]` | una sub-task por condición de un aprobar-con-condiciones |
-| `arq link A B [--apply]` | linkea dos issues (por ejemplo, la épica de delivery de Product Brain) |
-| `arq eval tests/golden/PRY reviews/PRY.md` | evalúa un review contra un golden case |
+| *«Registrá el PRY-2026-0001»*, *«hacé el triage»* | `arq-manager` copia el pedido tal cual, te propone las respuestas citando el pedido y deja el nivel (`simple` o `complejo`) cuando las confirmás vos |
+| *«Armá el Jira del PRY-2026-0001»* | `arq-manager` te muestra la épica, las historias y las sub-tasks, y te pasa el comando que las crea junto con el ticket del requirente; lo corrés vos |
+| *«¿Cómo viene el PRY-2026-0001?»* | `arq-manager` te da el comando de solo lectura que muestra el árbol de la épica con el avance de cada tarea |
+| *«Hacé el gap check»*, *«analizá el pedido»* | `arq-architect` revisa el input mínimo, analiza contra las constraints, propone el original más dos opciones para lo más débil, señales para Cloud, Seguridad y FinOps, y un veredicto propuesto |
+| *«Publicá el pedido de información»*, *«publicá la devolución»* | `arq-manager` muestra el mensaje exacto, controla que siga la plantilla y te pasa el comando para publicarlo |
+| *«Firmo como…»*, *«cerrá el pedido»* | `arq-manager` registra la firma, crea las sub-tasks de las condiciones y cierra con el resultado que corresponde al veredicto |
 
-## Garantías
+**Nada se escribe en Jira sin `--apply`, y el `--apply` lo corrés vos, no el agente.** Tampoco aprueba ni rechaza en la
+plataforma PRY: ese click es de una persona. No hay ventana de aprobación como en otras herramientas del Harness: el
+control es el dry run que ves antes y el comando que corrés vos. Los [límites](docs/referencia.md#garantías) están en la
+referencia.
 
-- **Nada se escribe en Jira sin `--apply`**, y el `--apply` lo corre una persona. Nada aprueba ni rechaza en la
-  plataforma PRY: eso también lo hace una persona.
-- **El ticket del requirente se crea a su nombre**, buscado en Jira por email: pedido JSM con el head como
-  participante, o issue del help desk con el contacto de reporter y el head de watcher. Si no se puede confirmar la
-  identidad o Jira rechaza el reporter, no se crea nada.
-- **Volver a correr no duplica.** Cada issue lleva un ID estable (entity property `arq.node`); renombrarlo en Jira es
-  seguro. La búsqueda por label `pry:` y el journal cubren la demora del índice de Jira.
-- **Lo público tiene guardas:** sigue una plantilla `jsm-*.md`, nombra su PRY, respeta el estado del pedido (una
-  devolución nunca sale antes de la firma) y no se publica dos veces el mismo mensaje.
-- **La firma queda atada al veredicto:** se firma solo en `en-firma`; reabrir el análisis la anula.
-- **El tablero avanza solo.** Cada `arq jira PRY --apply` pasa a Done las tareas que el review ya da por cumplidas
-  y a En curso la siguiente, con su historia y la épica (nunca reabre nada); `arq ver` las muestra con ✔ y ◐.
-- **Jira es un espejo del review.** La épica muestra el resumen del análisis y cada tarea dice qué hacer y cuándo
-  está terminada. Cada `arq jira PRY --apply` reescribe las descripciones que cambiaron: **no editarlas a mano** (se
-  pisan); las notas van en comentarios y los responsables no se tocan.
+## Elegí por dónde empezar
 
-## Tests
+| Skill | Qué resuelve | Jira | Se instala con | Showcase | Instalación |
+|---|---|---|---|---|---|
+| **`arq-manager`** | Registrar, clasificar, abrir la épica y el ticket del requirente, cuidar el plazo, publicar y cerrar | Escribe, con `--apply` que corrés vos (y `arq ver`, solo lectura) | `./install.sh` | [Ver el caso](docs/showcase.md#2-armar-el-jira-del-pedido) | [Instalar](docs/instalacion.md#1-instalar) |
+| **`arq-architect`** | Revisar el input mínimo, analizar contra las constraints, opciones y veredicto propuesto | No escribe en Jira; deja todo en `reviews/PRY-AAAA-NNNN.md` | `./install.sh` | [Ver el caso](docs/showcase.md#4-gap-check-y-pedido-de-información) | [Instalar](docs/instalacion.md#1-instalar) |
+| **`arq`** (CLI) | Estado del review, guardas, dry run y escritura en Jira; lo usan las dos skills | Escribe solo con `--apply` | `./install.sh` | [Ver el caso](docs/showcase.md#9-las-guardas-del-cli) | [Instalar](docs/instalacion.md#1-instalar) |
+
+Las dos skills se instalan juntas y nunca se llaman entre sí: cada una mira el estado del review y sabe si le toca. Por
+eso hay **un solo juego de documentos** para todo el repo.
+
+## Un ejemplo: armar el Jira de un pedido
+
+El agente te muestra, sin escribir nada, la épica con sus historias y sub-tasks (en consola y en una página
+`vista.html`) y el comando para crearlas. Lo corrés vos y recién ahí se escribe. El recorrido completo está en el
+[showcase](docs/showcase.md#2-armar-el-jira-del-pedido).
+
+![Vista previa de la épica de un pedido antes de crearla en Jira](docs/img/preview-epica.png)
+
+*Recorte de la página `vista.html` real que genera `arq jira --html`, con un pedido de ejemplo.*
+
+## Qué documento leer
+
+| Si querés… | Leé | Qué encontrás |
+|---|---|---|
+| **Instalarlo y probarlo, desde Cursor** | [Instalación y primer uso](docs/instalacion.md) | Todo con prompts: instalar, preparar el repo de reviews, credenciales, registrar un pedido y llevarlo hasta el cierre, con maquetas de Cursor |
+| **Instalarlo comando por comando** | [Instalación detallada](docs/instalacion-detallada.md) | Requisitos, `./install.sh`, el repo de reviews, credenciales, y el recorrido de un pedido corriendo cada comando de `arq`, con capturas de la terminal |
+| **Ver todo lo que hace** | [Showcase](docs/showcase.md) | Cada etapa en un escenario: qué le decís al agente, qué comandos corre, qué ves y qué te protege |
+| **Consultar un comando o una regla** | [Referencia](docs/referencia.md) | El README original: todos los comandos, el repo de reviews y su `config.json`, las garantías, las guías y presentaciones |
+
+## En tres comandos
 
 ```bash
-python3 -m unittest discover -s tests -v
-/usr/bin/python3 -m unittest discover -s tests       # compatibilidad 3.9
+git clone git@github.com:josefigueredo/arch-review.git arq-review
+cd arq-review && ./install.sh     # enlaza las dos skills y deja `arq` en ~/.local/bin
+arq --help                        # comprueba que el comando responde, sin tocar nada
 ```
+
+Después, `arq` se usa parado en el repo de reviews de tu equipo (no en este), y las escrituras en Jira necesitan
+[tus credenciales](docs/instalacion-detallada.md#3-credenciales-de-jira) (tres variables de entorno). Requisitos:
+`python3` 3.9 o más (solo biblioteca estándar) y acceso al repo.
+
+## Desarrollo
+
+```bash
+python3 -m unittest discover -s tests -v          # con Jira falso: nunca sale a la red
+/usr/bin/python3 -m unittest discover -s tests    # compatibilidad 3.9
+```
+
+Las reglas para quien modifica este repo están en [`AGENTS.md`](AGENTS.md); el diseño y sus decisiones (D1–D16), en la
+[referencia](docs/referencia.md).
