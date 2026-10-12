@@ -22,6 +22,6 @@
     mmdc) y se commitean juntos. Si cambian los pasos, las tareas de `structure.py` o un subcomando, actualizar las
     dos guías.
   - Los PNG de `docs/diagrams/` se regeneran con el comando que figura en `jira-flujo.md`.
-  - Una decisión nueva va como `D<n>` en el spec y su rango se actualiza en el README.
+  - Una decisión nueva va como `D<n>` en el spec y su rango se actualiza en `docs/referencia.md` y en el README (que es un índice y lo repite).
 - Commits: conventional commits, sin atribución de IA. Rama corta y merge fast-forward a `main`. El push lo hace el
   usuario.
