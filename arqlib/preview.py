@@ -1,14 +1,30 @@
 """Dry-run preview: a self-contained HTML tree of what `arq jira --apply` would create."""
 from __future__ import annotations
 
+import re
 from html import escape
 from typing import Dict
+
+_CODE = re.compile(r"\{\{(.+?)\}\}")
+_BOLD = re.compile(r"(?<!\w)\*(.+?)\*(?!\w)")
+_ITALIC = re.compile(r"(?<!\w)_(.+?)_(?!\w)")
+_ESCAPED = re.compile(r"\\([\[\]{}])")
+
+
+def _wiki(text: str) -> str:
+    """Descriptions are Jira wiki markup (`{{code}}`, `*bold*`, `_italic_`); show them as Jira would, not raw."""
+    parts = _CODE.split(escape(text))  # escaped first: user text can never inject tags
+    for i in range(0, len(parts), 2):
+        parts[i] = _ITALIC.sub(r"<em>\1</em>", _BOLD.sub(r"<strong>\1</strong>", parts[i]))
+    for i in range(1, len(parts), 2):
+        parts[i] = f"<code>{parts[i]}</code>"
+    return _ESCAPED.sub(r"\1", "".join(parts))
 
 
 def _li(node: dict, kind: str, children: str = "") -> str:
     labels = " ".join(f'<span class="l">{escape(label)}</span>' for label in node["labels"])
     return (f'<li><span class="k">{escape(kind)}</span> {escape(node["summary"])} {labels}'
-            f'<div class="d">{escape(node["description"])}</div>{children}</li>')
+            f'<div class="d">{_wiki(node["description"])}</div>{children}</li>')
 
 
 def render_html(plan: dict, meta: Dict[str, str]) -> str:
