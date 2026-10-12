@@ -1,6 +1,7 @@
 ---
 name: arq-manager
 description: Use when a PRY-YYYY-NNNN project request arrives for Architecture validation and someone has to register it, triage it, open its Jira epic and the requester's ticket, watch its deadline, or publish the signed decision. Coordination only; technical judgment belongs to arq-architect.
+compatibility: Needs the `arq` CLI on PATH (installed by install.sh; requires python3 3.9+) and git, run from the team reviews repo. Commands with --apply also need JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN in the environment.
 ---
 
 # arq-manager
