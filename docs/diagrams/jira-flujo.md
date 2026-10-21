@@ -102,7 +102,7 @@ sequenceDiagram
         loop hasta completar el input mínimo
             Arq->>CLI: arq set faltantes + análisis preliminar
             CLI->>Git: esperando-info · faltan 10 de 13
-            EM->>CLI: arq jsm --public --template jsm-pedido-info --apply
+            EM->>CLI: arq jsm PRY --file reviews/PRY.jsm.md --public --template jsm-pedido-info.md --apply
             CLI->>PEHD: 11 preguntas concretas en PEHD-86 (8/10)
             EM->>CLI: arq jira --apply
             CLI->>PLATE: PLATE-614 muestra faltantes y señales · tareas cumplidas a Done
@@ -126,7 +126,7 @@ sequenceDiagram
         Firma->>Git: revisa reviews/PRY-2026-0028.md
         Firma->>CLI: firma · pasa a publicado
         CLI->>Git: estado publicado
-        EM->>CLI: arq jsm --public --template jsm-devolucion --apply
+        EM->>CLI: arq jsm PRY --file reviews/PRY.jsm.md --public --template jsm-devolucion.md --apply
         CLI->>PEHD: devolución en PEHD-86 (ej.: apagado fuera de horario, presupuesto con alerta)
         EM->>CLI: arq seguimiento "condición" --apply
         CLI->>PLATE: una sub-task por condición bajo PLATE-623
