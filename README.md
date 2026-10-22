@@ -46,6 +46,7 @@ El agente te muestra, sin escribir nada, la épica con sus historias y sub-tasks
 | **Instalarlo y probarlo, desde Cursor** | [Instalación y primer uso](docs/instalacion.md) | Todo con prompts: instalar, preparar el repo de reviews, credenciales, registrar un pedido y llevarlo hasta el cierre, con maquetas de Cursor |
 | **Instalarlo comando por comando** | [Instalación detallada](docs/instalacion-detallada.md) | Requisitos, `./install.sh`, el repo de reviews, credenciales, y el recorrido de un pedido corriendo cada comando de `arq`, con capturas de la terminal |
 | **Ver todo lo que hace** | [Showcase](docs/showcase.md) | Cada etapa en un escenario: qué le decís al agente, qué comandos corre, qué ves y qué te protege |
+| **Verla en el taller de skills** | [Episodio del taller](https://animated-couscous-365py3k.pages.github.io/) | El episodio que se dio en el taller de team, publicado en GitHub Pages (sitio privado: entrás con tu cuenta de la organización). El guion vive en [`workshop/`](workshop/) |
 | **Consultar un comando o una regla** | [Referencia](docs/referencia.md) | El README original: todos los comandos, el repo de reviews y su `config.json`, las garantías, las guías y presentaciones |
 
 ## En tres comandos
